@@ -1,4 +1,5 @@
 MoV Ax -12
+MoV CX 1
 add bx 31
 inc ax
 inc ax
