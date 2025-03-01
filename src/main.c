@@ -73,9 +73,12 @@ int
 main(void)
 {
     struct cpu *cpu = cpu_new();
-    cpu_load_inst(cpu, "PROG");
+    cpu_load_instfile(cpu, "P_ENDMORE");
     for (;;) {
-        cpu_next_cycle(cpu);
+        if (cpu_next_cycle(cpu) == 1) {
+            printf("Error: No se pudo decodificar la instrucción\n");
+            break;
+        }
     }
     return 0;
 }

@@ -1,1 +1,1 @@
-sources = files('main.c', 'inmanip.c', 'cpu_inst.c')
+sources = files('main.c', 'cpu.c', 'insts.c')
