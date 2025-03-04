@@ -1,7 +1,9 @@
 //#include <insts.h>
 #include "../include/insts.h"
+#include "cpu.h"
 #include <stdint.h>
 #include <regex.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -39,7 +41,7 @@ int32_t inc(struct cpu *self, enum reg ra, int32_t imm);
 int32_t dec(struct cpu *self, enum reg ra, int32_t imm);
 int32_t nop(struct cpu *self, enum reg ra, enum reg rb);
 int32_t nopi(struct cpu *self, enum reg ra, int32_t imm);
-int32_t end(struct cpu *self, enum reg ra, int32_t imm);
+int32_t endc(struct cpu *self, enum reg ra, int32_t imm);
 
 /*
  * Definimos las instrucciones que podrán ser llamadas por la CPU, no todas
@@ -49,8 +51,8 @@ int32_t (*insts[OP_LIMIT])(struct cpu *, enum reg, enum reg) = {
     mov, add, sub, mul, cdiv, nop, nop, nop, nop
 };
 
-int32_t (*imm_insts[OP_LIMIT])(struct cpu *, enum reg, int) = {
-    movi, addi, subi, muli, divi, inc, dec, nopi, end
+int32_t (*imm_insts[OP_LIMIT])(struct cpu *, enum reg, int32_t) = {
+    movi, addi, subi, muli, divi, inc, dec, nopi, endc
 };
 
 int32_t
@@ -140,6 +142,10 @@ cdiv(struct cpu *self, enum reg ra, enum reg rb)
     if (ra >= REG_LIMIT || rb >= REG_LIMIT) {
         return 1;
     }
+    if (self->int_regs[rb] == 0) {
+        self->int_regs[ra] = 0;
+        return 0;
+    }
     self->int_regs[ra] /= self->int_regs[rb];
     return 0;
 }
@@ -149,6 +155,10 @@ divi(struct cpu *self, enum reg ra, int imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
+    }
+    if (imm == 0) {
+        self->int_regs[ra] = 0;
+        return 0;
     }
     self->int_regs[ra] /= imm;
     return 0;
@@ -192,9 +202,14 @@ nopi(struct cpu *self, enum reg ra, int32_t imm)
     return 0;
 }
 
+/*
+ * Función para procesar la instrucción END, por algún motivo si esta se
+ * llamaba end se le asignaba un valor erroneo.
+ */
 int32_t 
-end(struct cpu *self, enum reg ra, int32_t imm)
+endc(struct cpu *self, enum reg ra, int32_t imm)
 {
+    self->state = CPU_HALT;
     return 1;
 }
 
@@ -206,17 +221,20 @@ end(struct cpu *self, enum reg ra, int32_t imm)
 struct inst *
 inst_decode(const char *buf)
 {
+    if (!buf || buf[0] == '\0') {
+        return NULL;
+    }
     char name[5], arg1[5], arg2[5];
     int32_t args = sscanf(buf, "%4s %4s %4s", name, arg1, arg2);
     struct inst *new_inst = malloc(sizeof(*new_inst));
     if (new_inst && args >= 1) {
         new_inst->op = op_from_str(name);
         if (new_inst->op == OP_LIMIT) {
-            return NULL;
+            goto err;
         }
         if (args >= 2) {
             if(is_numeric(arg1)) {
-                return NULL;
+                goto err;
             }
             new_inst->ra = reg_from_str(arg1);
             if (args == 3) {
@@ -227,14 +245,14 @@ inst_decode(const char *buf)
                     new_inst->type = INST_REGISTER;
                     new_inst->rb = reg_from_str(arg2);
                     if (new_inst->rb == REG_LIMIT) {
-                        return NULL;
+                        goto err;
                     }
                 }
             } else if (args == 2 && (new_inst->op == OP_INC || new_inst->op == OP_DEC)) {
                 new_inst->type = INST_IMMEDIATE;
                 new_inst->imm = 0;
             } else {
-                return NULL;
+                goto err;
             }
         } else if (args == 1 && new_inst->op == OP_END) {
             new_inst->type = INST_IMMEDIATE;
@@ -243,17 +261,33 @@ inst_decode(const char *buf)
         }
     }
     return new_inst;
+    /*
+     * Aquí está lo que manejamos cuando la instrucción no pudo ser
+     * decodificada.
+     */
+err:
+    free(new_inst);
+    return NULL;
 }
 
+/*
+ * Ejecuta las instrucciones, regresará 1 cuando la instrucción a ejecutar sea
+ * simplemente END.
+ */
 int32_t
 inst_execute(struct inst *self, struct cpu *cpu)
 {
+    if (!self || !cpu || self->op >= OP_LIMIT) { return 2; }
     if (self->type == INST_IMMEDIATE) {
         return imm_insts[self->op](cpu, self->ra, self->imm); 
     } else 
     if (self->type == INST_REGISTER) {
         return insts[self->op](cpu, self->ra, self->rb);
     }
+    /*
+     * Esto nunca debería de pasar
+     */
+    return 2;
 }
 
 /*
