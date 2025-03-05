@@ -8,6 +8,7 @@
 #include <ncurses.h>
 #include <time.h>
 #include <unistd.h>
+#include <msg.h>
 
 #include "../include/cpu.h"
 
@@ -81,17 +82,6 @@ prompt(void)
     return cmd;
 }
 
-//Funcion para imprimir mensajes en la ventana de messages
-void messages_win(WINDOW *messages, const char *mensaje) {
-    box(messages, 0, 0); 
-
-    mvwprintw(messages, 0, 35, "|Messages|");
-
-    mvwprintw(messages, 1, 2, "%s", mensaje);
-
-    wrefresh(messages);
-}
-
 
 /*
  *Prototipo: int32_t eval(struct instruction *cmd, WINDOW *messages, PCB *pcb) {
@@ -108,31 +98,31 @@ void messages_win(WINDOW *messages, const char *mensaje) {
 int32_t 
 eval(struct cmd *cmd, WINDOW *messages) {
     if (!cmd) { 
-        messages_win(messages, "Error: Comando nulo.");
+        msg_log( LOG_LEVEL_ERROR, "Comando nulo.");
         return -1;
     }
 
     if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
-        messages_win(messages, "Saliendo del programa...\n");
+        msg_log( LOG_LEVEL_INFO, "Saliendo del programa...\n");
         wrefresh(messages);
         exit(0);
     } 
     else if (strncmp(cmd->name, "LOAD", 4) == 0) {
         if (cmd->arg1[0] == '\0') {
-            messages_win(messages, "Error: Falta el nombre del archivo\n");
+            msg_log(LOG_LEVEL_ERROR, "Falta el nombre del archivo\n");
             return 1;
         } else {
             char mensaje[300];
             snprintf(mensaje, sizeof(mensaje), "Cargando archivo: %s\n", cmd->arg1);
-            messages_win(messages, mensaje);
+            msg_log(LOG_LEVEL_INFO, mensaje);
 
             FILE *file = fopen(cmd->arg1, "r");
             if (file) {
-                messages_win(messages, "Archivo cargado con éxito.\n");
+                msg_log( LOG_LEVEL_INFO, "Archivo cargado con éxito.\n");
                 fclose(file);
             } else {
-                snprintf(mensaje, sizeof(mensaje), "Error: No se pudo abrir el archivo %s\n", cmd->arg1);
-                messages_win(messages, mensaje);
+                snprintf(mensaje, sizeof(mensaje), "No se pudo abrir el archivo %s\n", cmd->arg1);
+                msg_log( LOG_LEVEL_ERROR, mensaje);
             }
         }
     }
@@ -159,10 +149,13 @@ main(void) {
     cbreak();
     curs_set(1);
 
+    msg_init();
+
     struct prompt prompt;
-    WINDOW *messages = newwin(10, 80, 0, 0);
-    WINDOW *regwin = newwin(7, 80, 10, 0);
+    WINDOW *reg = newwin(7, 80, 10, 0);
+    box(reg, 0, 0);
     prompt.win = newwin(7, 80, 17, 0);
+    box(prompt.win, 0, 0);
     nodelay(prompt.win, TRUE); 
     keypad(prompt.win, TRUE);
     prompt.hist.current = 0;
@@ -172,8 +165,6 @@ main(void) {
     box(prompt.win, 0, 0);
     mvwprintw(prompt.win, 0, 35, "|Prompt|");
 
-    
-    char buf[80] = { 0 };
     double last_clock = 0;
     while (true) {
         if (cpu->state == CPU_READY) {
@@ -181,7 +172,7 @@ main(void) {
             if (delta > 2) {
                 cpu_next_cycle(cpu);
                 last_clock = clock();
-                //regwin_update(regwin);
+                //regwin_update(reg);
             }
         }
         /*

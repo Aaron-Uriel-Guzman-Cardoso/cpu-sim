@@ -4,9 +4,9 @@ project('simple-os-simulator', 'c',
 )
 
 includes = include_directories('include')
+ncurses = dependency('ncurses', required:true)
 
 subdir('src')
-ncurses = dependency('ncurses', required:true)
 if get_option('enable-tests')
   subdir('tests')
 endif
