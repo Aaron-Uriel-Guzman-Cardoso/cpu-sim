@@ -1,3 +1,5 @@
-cpu_inst_test = executable('cpu_inst_test', 'cpu_inst_test.c',
-  include_directories : include
+# Pruebas que si deberían de pasar exitosamente
+cpu_test_pass = executable('cpu_test_pass', 'cpu_test_pass.c',
+  include_directories : includes,
+  link_with : cpu_sim_lib
 )
