@@ -13,7 +13,7 @@ cpu_new(void)
 {
     struct cpu *new_cpu = calloc(1, sizeof(*new_cpu));
     if (new_cpu) {
-        new_cpu->state = CPU_EXECUTING;
+        new_cpu->state = CPU_HALT;
     }
     return new_cpu;
 }
@@ -26,7 +26,7 @@ cpu_new(void)
 int32_t
 cpu_reset(struct cpu *self)
 {
-    self->state = CPU_EXECUTING;
+    self->state = CPU_HALT;
     memset(self->instmem, 0, sizeof(self->instmem));
     memset(self->int_regs, 0, sizeof(self->int_regs));
     return 0;
@@ -74,6 +74,7 @@ cpu_load_insts_from_file(struct cpu *self, const char *filename)
             }
         }
     }
+    self->state = CPU_READY;
     return 0;
 }
 
@@ -125,6 +126,7 @@ cpu_load_insts_from_str(struct cpu *self, char *str)
         }
         instmem_size += 1;
     } 
+    self->state = CPU_READY;
     return 0;
 }
 

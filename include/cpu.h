@@ -5,7 +5,11 @@
 #include <stdio.h>
 
 enum reg { REG_AX, REG_BX, REG_CX, REG_DX, REG_PC, REG_IR, REG_LIMIT};
-enum cpu_state { CPU_EXECUTING, CPU_HALT, CPU_IR_ERROR };
+enum cpu_state { 
+    CPU_READY,      /* Lista para ejecutar nueva instrucción */
+    CPU_HALT,       /* Se ejecutó END o final de archivo */
+    CPU_IR_ERROR    /* Instrucciones ilegales (¿será esto necesario?) */
+};
 enum consts {
     INSTS_MAX = 128,
     INSTS_STR_MAX = 32

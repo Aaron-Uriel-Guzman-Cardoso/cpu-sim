@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <ncurses.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "../include/cpu.h"
 
@@ -175,7 +176,7 @@ main(void) {
     char buf[80] = { 0 };
     double last_clock = 0;
     while (true) {
-        if (cpu->state == CPU_EXECUTING) {
+        if (cpu->state == CPU_READY) {
             double delta = (double)(clock() - last_clock) / CLOCKS_PER_SEC;
             if (delta > 2) {
                 cpu_next_cycle(cpu);
@@ -192,3 +193,4 @@ main(void) {
     endwin();
     return 0;
 }
+

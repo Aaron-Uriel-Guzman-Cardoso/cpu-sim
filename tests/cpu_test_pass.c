@@ -118,10 +118,9 @@ main(void)
 {
     struct cpu *cpu = cpu_new();
     cpu_load_insts_from_str(cpu, prog_one);
-    printf("%d %d\n", cpu->int_regs[REG_AX], cpu->int_regs[REG_PC]);
     for (int32_t i = 0; i < 8; i += 1) {
         assert(cpu_next_cycle(cpu) == 0);
-        assert(cpu->state == CPU_EXECUTING);
+        assert(cpu->state == CPU_READY);
     }
     assert(cpu_next_cycle(cpu) == 3); /* La instrucción ejecutada es END*/
     assert(cpu->state == CPU_HALT);
@@ -132,7 +131,7 @@ main(void)
     cpu_load_insts_from_str(cpu, prog_two);
     for (int32_t i = 0; i < 89; i += 1) {
         assert(cpu_next_cycle(cpu) == 0);
-        assert(cpu->state == CPU_EXECUTING);
+        assert(cpu->state == CPU_READY);
     }
     assert(cpu_next_cycle(cpu) == 3);
     assert(cpu->state == CPU_HALT);
