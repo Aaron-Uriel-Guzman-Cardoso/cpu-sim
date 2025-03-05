@@ -6,10 +6,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ncurses.h>
+#include <time.h>
 
 #include "../include/cpu.h"
 
 #define MAX_CMD_CHARS 50
+#define HISTORY_SIZE 3
 
 struct cmd {
     char name[MAX_CMD_CHARS];
@@ -17,8 +19,49 @@ struct cmd {
     char arg2[MAX_CMD_CHARS];
 };
 
+struct cmd_history {
+    struct cmd history[HISTORY_SIZE];
+    int current;
+    int size;
+};
+
 struct pcb *pcb;
 
+void clear_window_part(WINDOW *win, int start_y, int start_x, int height, int width) {
+    for (int y = start_y; y < start_y + height; y++) {
+        for (int x = start_x; x < start_x + width; x++) {
+            mvwaddch(win, y, x, ' ');
+        }
+    }
+    wrefresh(win);
+}
+
+struct cmd *
+instruction_decode(const char *buf)
+{
+    struct cmd *inst = malloc(sizeof(*inst));
+    if (inst) {
+        //inst->name[0] = '\0';
+        //inst->arg1[0] = '\0';
+        //inst->arg2[0] = '\0';
+
+        memset(inst->name, 0, sizeof(inst->name));
+        memset(inst->arg1, 0, sizeof(inst->arg1));
+        memset(inst->arg2, 0, sizeof(inst->arg2));
+
+        sscanf(buf, "%s %s %s", inst->name, inst->arg1, inst->arg2);
+        for(size_t i = 0; inst->name[i] != '\0'; i += 1) {
+            inst->name[i] = toupper(inst->name[i]);
+        }
+        for(size_t i = 0; inst->arg1[i] != '\0'; i += 1) {
+            inst->arg1[i] = toupper(inst->arg1[i]);
+        }
+        for(size_t i = 0; inst->arg2[i] != '\0'; i += 1) {
+            inst->arg2[i] = toupper(inst->arg2[i]);
+        }
+    }
+    return inst;
+}
 
 /*
  * Imprime un prompt y obtiene un comando ingresado por el usuario.
@@ -96,16 +139,56 @@ eval(struct cmd *cmd, WINDOW *messages) {
     return 0;
 }
 
+struct prompt {
+    char buf[120];
+    size_t buflen;
+    struct instruction *decoded_inst;
+    WINDOW *win;
+    struct cmd_history hist;
+    int hist_index;
+};
+
+struct cpu *cpu;
+
 int
-main(void)
-{
-    struct cpu *cpu = cpu_new();
-    cpu_load_instfile(cpu, "P_ENDMORE");
-    for (;;) {
-        if (cpu_next_cycle(cpu) == 1) {
-            printf("Error: No se pudo decodificar la instrucción\n");
-            break;
+main(void) {
+    cpu = cpu_new();
+    initscr();
+    noecho();
+    cbreak();
+    curs_set(1);
+
+    struct prompt prompt;
+    WINDOW *messages = newwin(10, 80, 0, 0);
+    WINDOW *regwin = newwin(7, 80, 10, 0);
+    prompt.win = newwin(7, 80, 17, 0);
+    nodelay(prompt.win, TRUE); 
+    keypad(prompt.win, TRUE);
+    prompt.hist.current = 0;
+    prompt.hist.size = 0;
+    prompt.hist_index = 0;
+
+    box(prompt.win, 0, 0);
+    mvwprintw(prompt.win, 0, 35, "|Prompt|");
+
+    
+    char buf[80] = { 0 };
+    double last_clock = 0;
+    while (true) {
+        if (cpu->state == CPU_EXECUTING) {
+            double delta = (double)(clock() - last_clock) / CLOCKS_PER_SEC;
+            if (delta > 2) {
+                cpu_next_cycle(cpu);
+                last_clock = clock();
+                //regwin_update(regwin);
+            }
         }
+        /*
+         * La lógica del bucle principal se ejecuta cada 33 ms
+         * (más o menos 30 FPS o HZ).
+         */
+        usleep(33E3);
     }
+    endwin();
     return 0;
 }
