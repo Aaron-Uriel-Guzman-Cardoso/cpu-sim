@@ -184,7 +184,7 @@ regwin_update(void)
  */
 
 int32_t 
-eval(struct cmd *cmd, WINDOW *messages) {
+eval(struct cmd *cmd) {
     if (!cmd) { 
         msg_log( LOG_LEVEL_ERROR, "Comando nulo.");
         return -1;
@@ -192,7 +192,6 @@ eval(struct cmd *cmd, WINDOW *messages) {
 
     if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
         msg_log(LOG_LEVEL_INFO, "Saliendo del programa...\n");
-        wrefresh(messages);
         exit(0);
     } 
     else if (strncmp(cmd->name, "LOAD", 4) == 0) {
@@ -257,6 +256,9 @@ main(void) {
     cpu_load_insts_from_str(cpu, prog_one);
     while (true) {
         enum prompt_status status = prompt_update(&prompt);
+        if (status == PROMPT_STATUS_INSTRUCTION_DECODED) {
+            eval(prompt.decoded_inst);
+        }
         if (cpu->state == CPU_READY) {
             struct timespec curr, delta;
             clock_gettime(CLOCK_MONOTONIC, &curr);
