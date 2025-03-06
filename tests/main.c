@@ -9,6 +9,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <msg.h>
+#include <ncurses_utilities.h>
 
 #include "../include/cpu.h"
 
@@ -27,16 +28,9 @@ struct cmd_history {
     int size;
 };
 
-struct pcb *pcb;
-
-void clear_window_part(WINDOW *win, int start_y, int start_x, int height, int width) {
-    for (int y = start_y; y < start_y + height; y++) {
-        for (int x = start_x; x < start_x + width; x++) {
-            mvwaddch(win, y, x, ' ');
-        }
-    }
-    wrefresh(win);
-}
+WINDOW *reg;
+struct cpu *cpu; /* Tendremos una única CPU en el simulador */
+struct timespec cpu_period = { 2, 0 }; /* Frecuencia de ejecucón de la cpu */ 
 
 struct cmd *
 instruction_decode(const char *buf)
@@ -80,6 +74,26 @@ prompt(void)
         cmd->name[i] = toupper(cmd->name[i]);
     }
     return cmd;
+}
+
+
+int32_t
+regwin_update(void)
+{
+    clear_window_part(reg, 1, 1, 5, 78);
+    mvwprintw(reg, 2, 2, "AX: %d", cpu->int_regs[REG_AX]);
+    mvwprintw(reg, 3, 2, "BX: %d", cpu->int_regs[REG_BX]);
+    mvwprintw(reg, 4, 2, "CX: %d", cpu->int_regs[REG_CX]);
+    mvwprintw(reg, 2, 35, "DX: %d", cpu->int_regs[REG_DX]);
+    mvwprintw(reg, 3, 35, "PC: %d", cpu->int_regs[REG_PC]);
+    /*
+     * Imprimimos el valor entero, falta implementar las conversión de entero
+     * a cadena legible por el humano.
+     */
+    mvwprintw(reg, 4, 35, "IR: %d", cpu->int_regs[REG_IR]);
+    mvwprintw(reg, 4, 35, "freq: %g Hz", 1.0/cpu_period.tv_sec);
+    wrefresh(reg);
+    return 0;
 }
 
 
@@ -139,8 +153,6 @@ struct prompt {
     int hist_index;
 };
 
-struct cpu *cpu;
-
 int
 main(void) {
     cpu = cpu_new();
@@ -152,8 +164,9 @@ main(void) {
     msg_init();
 
     struct prompt prompt;
-    WINDOW *reg = newwin(7, 80, 10, 0);
+    reg = newwin(7, 80, 10, 0);
     box(reg, 0, 0);
+    wrefresh(reg);
     prompt.win = newwin(7, 80, 17, 0);
     box(prompt.win, 0, 0);
     nodelay(prompt.win, TRUE); 
@@ -165,14 +178,28 @@ main(void) {
     box(prompt.win, 0, 0);
     mvwprintw(prompt.win, 0, 35, "|Prompt|");
 
-    double last_clock = 0;
+    struct timespec last_cpu_execution = { 0 };
+    char prog_one[] = "MoV Ax -13\n"
+        "add bx 31\n"
+        "inc ax\n"
+        "inc ax\n"
+        "dec bx\n"
+        "Mul cX 3140\n"
+        "aDD ax 10\n"
+        "div bx ax\n"
+        "end\n"
+        "MOV RAX 3\n";
+    cpu_load_insts_from_str(cpu, prog_one);
     while (true) {
         if (cpu->state == CPU_READY) {
-            double delta = (double)(clock() - last_clock) / CLOCKS_PER_SEC;
-            if (delta > 2) {
+            struct timespec curr, delta;
+            clock_gettime(CLOCK_MONOTONIC, &curr);
+            delta.tv_sec = curr.tv_sec - last_cpu_execution.tv_sec;
+            delta.tv_nsec = curr.tv_nsec - last_cpu_execution.tv_nsec;
+            if (delta.tv_sec > cpu_period.tv_sec) {
                 cpu_next_cycle(cpu);
-                last_clock = clock();
-                //regwin_update(reg);
+                last_cpu_execution = curr;
+                regwin_update();
             }
         }
         /*
