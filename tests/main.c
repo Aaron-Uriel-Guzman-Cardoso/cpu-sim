@@ -67,8 +67,7 @@ prompt(void)
 {
     struct cmd *cmd = malloc(sizeof(*cmd));
     if (!cmd) { return NULL; }
-    const size_t MAX_BUF_SIZE = 120;
-    char buf[] = "LOAD PROG", c;
+    char buf[] = "LOAD PROG";
     sscanf(buf, "%s %s %s", cmd->name, cmd->arg1, cmd->arg2);
     for(int i = 0; cmd->name[i] != '\0'; i += 1) {
         cmd->name[i] = toupper(cmd->name[i]);
@@ -81,16 +80,16 @@ int32_t
 regwin_update(void)
 {
     clear_window_part(reg, 1, 1, 5, 78);
-    mvwprintw(reg, 2, 2, "AX: %d", cpu->int_regs[REG_AX]);
-    mvwprintw(reg, 3, 2, "BX: %d", cpu->int_regs[REG_BX]);
-    mvwprintw(reg, 4, 2, "CX: %d", cpu->int_regs[REG_CX]);
-    mvwprintw(reg, 2, 35, "DX: %d", cpu->int_regs[REG_DX]);
-    mvwprintw(reg, 3, 35, "PC: %d", cpu->int_regs[REG_PC]);
+    mvwprintw(reg, 2, 2, "AX: %d", cpu->regs[REG_AX]);
+    mvwprintw(reg, 3, 2, "BX: %d", cpu->regs[REG_BX]);
+    mvwprintw(reg, 4, 2, "CX: %d", cpu->regs[REG_CX]);
+    mvwprintw(reg, 2, 35, "DX: %d", cpu->regs[REG_DX]);
+    mvwprintw(reg, 3, 35, "PC: %d", cpu->regs[REG_PC]);
     /*
      * Imprimimos el valor entero, falta implementar las conversión de entero
      * a cadena legible por el humano.
      */
-    mvwprintw(reg, 4, 35, "IR: %d", cpu->int_regs[REG_IR]);
+    mvwprintw(reg, 4, 35, "IR: %d", cpu->regs[REG_IR]);
     mvwprintw(reg, 4, 35, "freq: %g Hz", 1.0/cpu_period.tv_sec);
     wrefresh(reg);
     return 0;

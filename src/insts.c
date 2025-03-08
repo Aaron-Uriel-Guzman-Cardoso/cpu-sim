@@ -1,193 +1,187 @@
-//#include <insts.h>
-#include "../include/insts.h"
-#include "cpu.h"
+#include <insts.h>
+#include <cpu.h>
 #include <stdint.h>
 #include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-/*
- * Estructura que representa a una instrucción ejecutable por la CPU.
- * Se trata también de una unión etiquetada, donde la etiqueta es si una
- * instrucción es de registro a registro o inmediata.
- */
-struct inst {
-    enum op op;
-    enum reg ra;
-    enum { INST_IMMEDIATE, INST_REGISTER } type;
-    union {
-        enum reg rb;
-        int32_t imm;
-    };
-};
+#include <stdbool.h>
 
-int32_t is_numeric(const char *str);
 
 enum reg reg_from_str(const char *str);
-enum op op_from_str(const char *str);
+enum op op_from_str(const char *str, bool is_immediate);
 
-int32_t mov(struct cpu *self, enum reg ra, enum reg rb);
-int32_t movi(struct cpu *self, enum reg ra, int imm);
-int32_t add(struct cpu *self, enum reg ra, enum reg rb);
-int32_t addi(struct cpu *self, enum reg ra, int imm);
-int32_t sub(struct cpu *self, enum reg ra, enum reg rb);
-int32_t subi(struct cpu *self, enum reg ra, int imm);
-int32_t mul(struct cpu *self, enum reg ra, enum reg rb);
-int32_t muli(struct cpu *self, enum reg ra, int imm);
-int32_t cdiv(struct cpu *self, enum reg ra, enum reg rb);
-int32_t divi(struct cpu *self, enum reg ra, int imm);
-int32_t inc(struct cpu *self, enum reg ra, int32_t imm);
-int32_t dec(struct cpu *self, enum reg ra, int32_t imm);
-int32_t nop(struct cpu *self, enum reg ra, enum reg rb);
-int32_t nopi(struct cpu *self, enum reg ra, int32_t imm);
-int32_t endc(struct cpu *self, enum reg ra, int32_t imm);
+int32_t op_mov(struct cpu *self, enum reg ra, enum reg rb);
+int32_t op_movi(struct cpu *self, enum reg ra, int imm);
+int32_t op_add(struct cpu *self, enum reg ra, enum reg rb);
+int32_t op_addi(struct cpu *self, enum reg ra, int imm);
+int32_t op_sub(struct cpu *self, enum reg ra, enum reg rb);
+int32_t op_subi(struct cpu *self, enum reg ra, int imm);
+int32_t op_mul(struct cpu *self, enum reg ra, enum reg rb);
+int32_t op_muli(struct cpu *self, enum reg ra, int imm);
+int32_t op_div(struct cpu *self, enum reg ra, enum reg rb);
+int32_t op_divi(struct cpu *self, enum reg ra, int imm);
+int32_t op_inc(struct cpu *self, enum reg ra, int32_t imm);
+int32_t op_dec(struct cpu *self, enum reg ra,  int32_t imm);
+int32_t op_nop(struct cpu *self, enum reg ra,  int32_t imm);
+int32_t op_end(struct cpu *self, enum reg ra,  int32_t imm);
+
+/*
+ * Unión que representa los dos formatos que pueden tener las operaciones: de
+ * registro a registro e inmediatas (el segundo de sus argumentos es un valor
+ * entero).
+ */
+union op_fn {
+    int32_t (*reg_to_reg)(struct cpu *, enum reg, enum reg);
+    int32_t (*imm)(struct cpu *, enum reg, int32_t);
+};
 
 /*
  * Definimos las instrucciones que podrán ser llamadas por la CPU, no todas
  * están definidas pues algunas son únicamente inmediatas.
  */
-int32_t (*insts[OP_LIMIT])(struct cpu *, enum reg, enum reg) = {
-    mov, add, sub, mul, cdiv, nop, nop, nop, nop
+union op_fn ops[OP_LIMIT] = {
+    { .reg_to_reg = op_mov}, { .reg_to_reg = op_add }, { .reg_to_reg = op_sub},
+    { .reg_to_reg = op_mul}, { .reg_to_reg = op_div }, { .imm = op_inc },
+    { .imm = op_dec }, { .imm = op_nop }, {.imm = op_end }, {.imm = op_movi },
+    { .imm = op_addi }, { .imm = op_subi }, { .imm = op_muli },
+    { .imm = op_divi }
 };
 
-int32_t (*imm_insts[OP_LIMIT])(struct cpu *, enum reg, int32_t) = {
-    movi, addi, subi, muli, divi, inc, dec, nopi, endc
-};
-
 int32_t
-mov(struct cpu *self, enum reg ra, enum reg rb)
+op_mov(struct cpu *self, enum reg ra, enum reg rb)
 {
     if (ra >= REG_LIMIT || rb >= REG_LIMIT) {
         return 1;
     }
-    self->int_regs[ra] = self->int_regs[rb];
+    self->regs[ra] = self->regs[rb];
     return 0;
 }
 
 int32_t
-movi(struct cpu *self, enum reg ra, int imm)
+op_movi(struct cpu *self, enum reg ra, int imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->int_regs[ra] = imm;
+    self->regs[ra] = imm;
     return 0;
 }
 
 int32_t
-add(struct cpu *self, enum reg ra, enum reg rb)
+op_add(struct cpu *self, enum reg ra, enum reg rb)
 {
     if (ra >= REG_LIMIT || rb >= REG_LIMIT) {
         return 1;
     }
-    self->int_regs[ra] += self->int_regs[rb];
+    self->regs[ra] += self->regs[rb];
     return 0;
 }
 
 int32_t
-addi(struct cpu *self, enum reg ra, int imm)
+op_addi(struct cpu *self, enum reg ra, int imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->int_regs[ra] += imm;
+    self->regs[ra] += imm;
     return 0;
 }
 
 
 int32_t
-sub(struct cpu *self, enum reg ra, enum reg rb)
+op_sub(struct cpu *self, enum reg ra, enum reg rb)
 {
     if (ra >= REG_LIMIT || rb >= REG_LIMIT) {
         return 1;
     }
-    self->int_regs[ra] -= self->int_regs[rb];
+    self->regs[ra] -= self->regs[rb];
     return 0;
 }
 
 int32_t
-subi(struct cpu *self, enum reg ra, int imm)
+op_subi(struct cpu *self, enum reg ra, int imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->int_regs[ra] -= imm;
+    self->regs[ra] -= imm;
     return 0;
 }
 
 int32_t
-mul(struct cpu *self, enum reg ra, enum reg rb)
+op_mul(struct cpu *self, enum reg ra, enum reg rb)
 {
     if (ra >= REG_LIMIT || rb >= REG_LIMIT) {
         return 1;
     }
-    self->int_regs[ra] *= self->int_regs[rb];
+    self->regs[ra] *= self->regs[rb];
     return 0;
 }
 
 int32_t
-muli(struct cpu *self, enum reg ra, int imm)
+op_muli(struct cpu *self, enum reg ra, int imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->int_regs[ra] *= imm;
+    self->regs[ra] *= imm;
     return 0;
 }
 
 int32_t
-cdiv(struct cpu *self, enum reg ra, enum reg rb)
+op_div(struct cpu *self, enum reg ra, enum reg rb)
 {
     if (ra >= REG_LIMIT || rb >= REG_LIMIT) {
         return 1;
     }
-    if (self->int_regs[rb] == 0) {
-        self->int_regs[ra] = 0;
+    if (self->regs[rb] == 0) {
+        self->regs[ra] = 0;
         return 0;
     }
-    self->int_regs[ra] /= self->int_regs[rb];
+    self->regs[ra] /= self->regs[rb];
     return 0;
 }
 
 int32_t
-divi(struct cpu *self, enum reg ra, int imm)
+op_divi(struct cpu *self, enum reg ra, int imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
     if (imm == 0) {
-        self->int_regs[ra] = 0;
+        self->regs[ra] = 0;
         return 0;
     }
-    self->int_regs[ra] /= imm;
+    self->regs[ra] /= imm;
     return 0;
 }
 
 int32_t
-inc(struct cpu *self, enum reg ra, int32_t imm)
+op_inc(struct cpu *self, enum reg ra, int32_t imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->int_regs[ra] += 1;
+    self->regs[ra] += 1;
     return 0;
 }
 
 int32_t
-dec(struct cpu *self, enum reg ra, int32_t imm)
+op_dec(struct cpu *self, enum reg ra, int32_t imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->int_regs[ra] -= 1;
+    self->regs[ra] -= 1;
     return 0;
 }
 
 int32_t
-nop(struct cpu *self, enum reg ra, enum reg rb)
+op_nop(struct cpu *self, enum reg ra, int32_t imm)
 {
-    if (ra >= REG_LIMIT || rb >= REG_LIMIT) {
+    if (ra >= REG_LIMIT) {
         return 1;
     }
     return 0;
@@ -207,19 +201,18 @@ nopi(struct cpu *self, enum reg ra, int32_t imm)
  * llamaba end se le asignaba un valor erroneo.
  */
 int32_t 
-endc(struct cpu *self, enum reg ra, int32_t imm)
+op_end(struct cpu *self, enum reg ra, int32_t imm)
 {
     self->state = CPU_HALT;
     return 1;
 }
 
 /*
- * Convierte str en una instrucción procesable por la CPU.
+ * Convierte str a un formato de instrucción procesable por la CPU.
  * En caso de no haber una conversión válida se regresará NULL.
- * Esta es la que más trabajo va a ocupar de desarrollo
  */
 struct inst *
-inst_decode(const char *buf)
+inst_from_str(const char *buf)
 {
     if (!buf || buf[0] == '\0') {
         return NULL;
@@ -227,37 +220,40 @@ inst_decode(const char *buf)
     char name[5], arg1[5], arg2[5];
     int32_t args = sscanf(buf, "%4s %4s %4s", name, arg1, arg2);
     struct inst *new_inst = malloc(sizeof(*new_inst));
-    if (new_inst && args >= 1) {
-        new_inst->op = op_from_str(name);
-        if (new_inst->op == OP_LIMIT) {
-            goto err;
+    if (new_inst) {
+        if (args == 1 || args == 2) {
+            new_inst->op = op_from_str(name, true);
+            if (new_inst->op == OP_LIMIT) {
+                goto err;
+            }
+            new_inst->ra = REG_AX;
         }
         if (args >= 2) {
-            if(is_numeric(arg1)) {
-                goto err;
-            }
             new_inst->ra = reg_from_str(arg1);
-            if (args == 3) {
-                if (is_numeric(arg2)) {
-                    new_inst->type = INST_IMMEDIATE;
-                    new_inst->imm = atoi(arg2);
-                } else {
-                    new_inst->type = INST_REGISTER;
-                    new_inst->rb = reg_from_str(arg2);
-                    if (new_inst->rb == REG_LIMIT) {
-                        goto err;
-                    }
-                }
-            } else if (args == 2 && (new_inst->op == OP_INC || new_inst->op == OP_DEC)) {
-                new_inst->type = INST_IMMEDIATE;
-                new_inst->imm = 0;
-            } else {
+            if (new_inst->ra == REG_LIMIT) {
                 goto err;
             }
-        } else if (args == 1 && new_inst->op == OP_END) {
-            new_inst->type = INST_IMMEDIATE;
-            new_inst->ra = REG_AX;
+            /*
+             * Inicializamos con cero en caso de que la instrucción sea de
+             * solamente dos argumentos o inmediata.
+             */
             new_inst->imm = 0;
+        }
+        if (args == 3) {
+            /*
+             * Verificamos que arg2 sea o no un número, en caso de no serlo
+             * strtol debería de no mover el apuntador end y en caso de ser un
+             * número el mismo strtol debería de haberlo movido al final de la
+             * cadena (arg2 no tendrá nada después del número).
+             */
+            char *end;
+            new_inst->imm = strtol(arg2, &end, 10);
+            if (end == arg2 || *end != '\0') {
+                new_inst->op = op_from_str(name, false);
+                new_inst->rb = reg_from_str(arg2);
+            } else {
+                new_inst->op = op_from_str(name, true);
+            }
         }
     }
     return new_inst;
@@ -278,11 +274,10 @@ int32_t
 inst_execute(struct inst *self, struct cpu *cpu)
 {
     if (!self || !cpu || self->op >= OP_LIMIT) { return 2; }
-    if (self->type == INST_IMMEDIATE) {
-        return imm_insts[self->op](cpu, self->ra, self->imm); 
-    } else 
-    if (self->type == INST_REGISTER) {
-        return insts[self->op](cpu, self->ra, self->rb);
+    if (self->op >= OP_INC && self->op <= OP_LIMIT) {
+        return ops[self->op].imm(cpu, self->ra, self->imm);
+    } else {
+        return ops[self->op].reg_to_reg(cpu, self->ra, self->rb);
     }
     /*
      * Esto nunca debería de pasar
@@ -326,26 +321,30 @@ reg_from_str(const char *str)
 }
 
 /*
- * Obtiene la correspondencia de uso interno entre str y una operación
- * realizada por la CPU.
+ * Identifica la operación que efectuará la instrucción leída, esta función
+ * regresará entonces la operación en un formato que se puede manipular más
+ * fácilmente para el procesado de la CPU.
+ * El booleano `is_immediate` determinará si se usará la variante inmediata de
+ * la operación, en caso de no haber variante inmediata se regresará la misma
+ * función.
  */
 enum op
-op_from_str(const char *str)
+op_from_str(const char *str, bool is_immediate)
 {
     if (strncmp(str, "MOV", 3) == 0) {
-        return OP_MOV;
+        return (is_immediate)? OP_MOVI: OP_MOV;
     }
     else if (strncmp(str, "ADD", 3) == 0) {
-        return OP_ADD;
+        return (is_immediate)? OP_ADDI: OP_ADD;
     }
     else if (strncmp(str, "SUB", 3) == 0) {
-        return OP_SUB;
+        return (is_immediate)? OP_SUBI: OP_SUB;
     }
     else if (strncmp(str, "MUL", 3) == 0) {
-        return OP_MUL;
+        return (is_immediate)? OP_MULI: OP_MUL;
     }
     else if (strncmp(str, "DIV", 3) == 0) {
-        return OP_DIV;
+        return (is_immediate)? OP_DIVI: OP_DIV;
     }
     else if (strncmp(str, "INC", 3) == 0) {
         return OP_INC;
@@ -364,34 +363,3 @@ op_from_str(const char *str)
         return OP_LIMIT;
     }
 }
-
-/*
- * Verificación de si una cadena es un número o no a través de expresiones
- * regulares.
- */
-int32_t is_numeric(const char *str)
-{
-    regex_t regex;
-    int reti;
-
-    // Compilar la expresión regular para números
-    reti = regcomp(&regex, "^[+-]?[0-9]+$", REG_EXTENDED);
-    if (reti) {
-        fprintf(stderr, "No se pudo compilar la expresión regular\n");
-        return -1;
-    }
-
-    // Ejecutar la expresión regular
-    reti = regexec(&regex, str, 0, NULL, 0);
-    regfree(&regex);
-
-    if (!reti) {
-        return 1; // La cadena es numérica
-    } else if (reti == REG_NOMATCH) {
-        return 0; // La cadena no es numérica
-    } else {
-        fprintf(stderr, "Error al ejecutar la expresión regular\n");
-        return -1;
-    }
-}
-
