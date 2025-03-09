@@ -1,6 +1,7 @@
 #ifndef INSTS_H
 #define INSTS_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 /*
@@ -27,6 +28,7 @@ struct inst {
     };
 };
 struct inst * inst_from_str(const char *buf);
+void inst_to_str(const struct inst *self, char *str, size_t size);
 
 struct cpu;
 int32_t inst_execute(struct inst *self, struct cpu *cpu);

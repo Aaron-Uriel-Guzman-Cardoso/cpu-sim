@@ -320,6 +320,37 @@ reg_from_str(const char *str)
     }
 }
 
+void
+reg_to_str(enum reg reg, char *str, size_t size)
+{
+    if (!str || size == 0) {
+        return;
+    }
+    switch (reg) {
+    case REG_AX:
+        snprintf(str, size, "AX");
+        break;
+    case REG_BX:
+        snprintf(str, size, "BX");
+        break;
+    case REG_CX:
+        snprintf(str, size, "CX");
+        break;
+    case REG_DX:
+        snprintf(str, size, "DX");
+        break;
+    case REG_PC:
+        snprintf(str, size, "PC");
+        break;
+    case REG_IR:
+        snprintf(str, size, "IR");
+        break;
+    default:
+        snprintf(str, size, "LIMIT");
+        break;
+    }
+}
+
 /*
  * Identifica la operación que efectuará la instrucción leída, esta función
  * regresará entonces la operación en un formato que se puede manipular más
@@ -362,4 +393,67 @@ op_from_str(const char *str, bool is_immediate)
          */
         return OP_LIMIT;
     }
+}
+
+void
+op_to_str(enum op op, char *str, size_t size_t)
+{
+    if (!str || size_t == 0) {
+        return;
+    }
+    switch (op) {
+    case OP_MOV: case OP_MOVI:
+        snprintf(str, size_t, "MOV");
+        break;
+    case OP_ADD: case OP_ADDI:
+        snprintf(str, size_t, "ADD");
+        break;
+    case OP_SUB: case OP_SUBI:
+        snprintf(str, size_t, "SUB");
+        break;
+    case OP_MUL: case OP_MULI:
+        snprintf(str, size_t, "MUL");
+        break;
+    case OP_DIV: case OP_DIVI:
+        snprintf(str, size_t, "DIV");
+        break;
+    case OP_INC:
+        snprintf(str, size_t, "INC");
+        break;
+    case OP_DEC:
+        snprintf(str, size_t, "DEC");
+        break;
+    case OP_END:
+        snprintf(str, size_t, "END");
+        break;
+    default:
+        snprintf(str, size_t, "LIMIT");
+        break;
+    }
+}
+
+/*
+ * Determina si la operación recibida es de tipo inmediato
+ */
+bool
+is_immediate(enum op op)
+{
+    return (op >= OP_INC && op < OP_LIMIT);
+}
+
+/*
+ * Convierte una instrucción en un formato legible para el ser humano.
+ * En este caso LIMIT significa que un valor no pudo ser traducido.
+ */
+void
+inst_to_str(const struct inst *self, char *str, size_t size) {
+    char op[6], arg1[6], arg2[6];
+    op_to_str(self->op, op, 6);
+    reg_to_str(self->ra, arg1, 6);
+    if (is_immediate(self->op)) {
+        snprintf(arg2, 6, "%d", self->imm);
+    } else {
+        reg_to_str(self->rb, arg2, 6);
+    }
+    snprintf(str, size, "%s %s %s", op, arg1, arg2);
 }

@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <msg.h>
 #include <ncurses_utilities.h>
+#include <insts.h>
 
 #include "../include/cpu.h"
 
@@ -83,14 +84,12 @@ regwin_update(void)
     mvwprintw(reg, 2, 2, "AX: %d", cpu->regs[REG_AX]);
     mvwprintw(reg, 3, 2, "BX: %d", cpu->regs[REG_BX]);
     mvwprintw(reg, 4, 2, "CX: %d", cpu->regs[REG_CX]);
+    mvwprintw(reg, 5, 2, "freq: %g Hz", 1.0/cpu_period.tv_sec);
     mvwprintw(reg, 2, 35, "DX: %d", cpu->regs[REG_DX]);
     mvwprintw(reg, 3, 35, "PC: %d", cpu->regs[REG_PC]);
-    /*
-     * Imprimimos el valor entero, falta implementar las conversión de entero
-     * a cadena legible por el humano.
-     */
-    mvwprintw(reg, 4, 35, "IR: %d", cpu->regs[REG_IR]);
-    mvwprintw(reg, 4, 35, "freq: %g Hz", 1.0/cpu_period.tv_sec);
+    char current_inst[50];
+    inst_to_str((struct inst *)&cpu->regs[REG_IR], current_inst, 50);
+    mvwprintw(reg, 4, 35, "IR: %s", current_inst);
     wrefresh(reg);
     return 0;
 }
