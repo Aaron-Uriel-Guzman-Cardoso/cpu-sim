@@ -29,6 +29,21 @@ struct cmd_history {
     int size;
 };
 
+struct prompt {
+    char buf[120];
+    size_t buflen;
+    struct cmd *decoded_inst;
+    WINDOW *win;
+    struct cmd_history hist;
+    int hist_index;
+};
+
+enum prompt_status {
+    PROMPT_STATUS_OK,
+    PROMPT_STATUS_INVALID,
+    PROMPT_STATUS_INSTRUCTION_DECODED
+};
+
 WINDOW *reg;
 struct cpu *cpu; /* Tendremos una única CPU en el simulador */
 struct timespec cpu_period = { 2, 0 }; /* Frecuencia de ejecucón de la cpu */ 
@@ -58,6 +73,65 @@ instruction_decode(const char *buf)
         }
     }
     return inst;
+}
+
+enum prompt_status
+prompt_update(struct prompt *prompt)
+{
+    static char buf[200];
+    static int32_t buflen = 0;
+    int c;
+    enum prompt_status status = PROMPT_STATUS_OK;
+    if ((c = wgetch(prompt->win)) != -1) {
+        if (c == '\n') { 
+            clear_window_part(prompt->win, 1, 1, 5, 78);
+            prompt->decoded_inst = instruction_decode(buf);
+            buf[0] = buflen = 0;
+            if (prompt->decoded_inst) {
+                prompt->hist.history[prompt->hist.current] = *prompt->decoded_inst;
+                prompt->hist.current = (prompt->hist.current + 1) % HISTORY_SIZE;
+                if (prompt->hist.size < HISTORY_SIZE) {
+                    prompt->hist.size++;
+                }
+                prompt->hist_index = prompt->hist.current;
+                status = PROMPT_STATUS_INSTRUCTION_DECODED;
+            } else {
+                status = PROMPT_STATUS_INVALID;
+            }
+        } else if (c == KEY_BACKSPACE || c == 127 || c == 8) {
+            if (buflen > 0) {
+                buf[buflen - 1] = 0;
+                buflen -= 1;
+            }
+        } else if (c == KEY_UP) {
+            if (prompt->hist.size > 0) {
+                prompt->hist_index = (prompt->hist_index - 1 + HISTORY_SIZE) % HISTORY_SIZE;
+                snprintf(buf, sizeof(buf), "%s %s %s", prompt->hist.history[prompt->hist_index].name, prompt->hist.history[prompt->hist_index].arg1, prompt->hist.history[prompt->hist_index].arg2);
+                buflen = strlen(buf);
+            }
+        } else if (c == KEY_DOWN) {
+            if (prompt->hist.size > 0) {
+                prompt->hist_index = (prompt->hist_index + 1) % HISTORY_SIZE;
+                snprintf(buf, sizeof(buf), "%s %s %s", prompt->hist.history[prompt->hist_index].name, prompt->hist.history[prompt->hist_index].arg1, prompt->hist.history[prompt->hist_index].arg2);
+                buflen = strlen(buf);
+            }
+        } else if (buflen < 199) {
+            buf[buflen] = c;
+            buf[buflen + 1] = 0;
+            buflen += 1;
+        }
+        clear_window_part(prompt->win, 5, 1, 1, 78);
+        for (int i = 0; i < prompt->hist.size; i++) {
+            int index = (prompt->hist.current - 1 - i + HISTORY_SIZE) % HISTORY_SIZE;
+            mvwprintw(prompt->win, 4 - i, 1, "$ %s %s %s", 
+                      prompt->hist.history[index].name, 
+                      prompt->hist.history[index].arg1, 
+                      prompt->hist.history[index].arg2);
+        }
+        wrefresh(prompt->win);
+        mvwprintw(prompt->win, 5, 1, "$ %s", buf);
+    }
+    return status;
 }
 
 /*
@@ -108,15 +182,12 @@ regwin_update(void)
  */
 
 int32_t 
-eval(struct cmd *cmd, WINDOW *messages) {
-    if (!cmd) { 
-        msg_log( LOG_LEVEL_ERROR, "Comando nulo.");
-        return -1;
-    }
-
+eval(struct cmd *cmd) {
+    
     if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
-        msg_log( LOG_LEVEL_INFO, "Saliendo del programa...\n");
-        wrefresh(messages);
+        msg_log(LOG_LEVEL_INFO, "Saliendo del programa...\n");
+        endwin();
+        printf("\n");
         exit(0);
     } 
     else if (strncmp(cmd->name, "LOAD", 4) == 0) {
@@ -128,28 +199,28 @@ eval(struct cmd *cmd, WINDOW *messages) {
             snprintf(mensaje, sizeof(mensaje), "Cargando archivo: %s\n", cmd->arg1);
             msg_log(LOG_LEVEL_INFO, mensaje);
 
-            FILE *file = fopen(cmd->arg1, "r");
-            if (file) {
-                msg_log( LOG_LEVEL_INFO, "Archivo cargado con éxito.\n");
-                fclose(file);
+            // Reset CPU state before loading new program
+            cpu_reset(cpu);
+            
+            // Try to load instructions
+            int32_t result = cpu_load_insts_from_file(cpu, cmd->arg1);
+            if (result == 0) {
+                msg_log(LOG_LEVEL_INFO, "Archivo cargado con éxito.\n");
             } else {
-                snprintf(mensaje, sizeof(mensaje), "No se pudo abrir el archivo %s\n", cmd->arg1);
-                msg_log( LOG_LEVEL_ERROR, mensaje);
+                snprintf(mensaje, sizeof(mensaje), "Error al cargar archivo %s (código: %d)\n", 
+                        cmd->arg1, result);
+                msg_log(LOG_LEVEL_ERROR, mensaje);
             }
         }
     }
 
+    else { 
+        msg_log( LOG_LEVEL_ERROR, "Comando nulo.");
+        return -1;
+    }
+
     return 0;
 }
-
-struct prompt {
-    char buf[120];
-    size_t buflen;
-    struct instruction *decoded_inst;
-    WINDOW *win;
-    struct cmd_history hist;
-    int hist_index;
-};
 
 int
 main(void) {
@@ -177,7 +248,7 @@ main(void) {
     mvwprintw(prompt.win, 0, 35, "|Prompt|");
 
     struct timespec last_cpu_execution = { 0 };
-    char prog_one[] = "MoV Ax -13\n"
+    /*char prog_one[] = "MoV Ax -13\n"
         "add bx 31\n"
         "inc ax\n"
         "inc ax\n"
@@ -187,19 +258,35 @@ main(void) {
         "div bx ax\n"
         "end\n"
         "MOV RAX 3\n";
-    cpu_load_insts_from_str(cpu, prog_one);
+    cpu_load_insts_from_str(cpu, prog_one);*/
     while (true) {
+        enum prompt_status status = prompt_update(&prompt);
+        if (status == PROMPT_STATUS_INSTRUCTION_DECODED) {
+            eval(prompt.decoded_inst);
+            free(prompt.decoded_inst);
+            prompt.decoded_inst = NULL;
+        }
+
+        //cpu_load_insts_from_file(cpu, prompt.decoded_inst->arg1);
+
         if (cpu->state == CPU_READY) {
             struct timespec curr, delta;
+            
             clock_gettime(CLOCK_MONOTONIC, &curr);
             delta.tv_sec = curr.tv_sec - last_cpu_execution.tv_sec;
             delta.tv_nsec = curr.tv_nsec - last_cpu_execution.tv_nsec;
             if (delta.tv_sec > cpu_period.tv_sec) {
-                cpu_next_cycle(cpu);
+                int result = cpu_next_cycle(cpu);
+                if(result == 3) {
+                    msg_log(LOG_LEVEL_INFO, "Programa terminado. \n");
+                }
                 last_cpu_execution = curr;
                 regwin_update();
             }
         }
+
+        wrefresh(prompt.win);
+        wrefresh(reg);
         /*
          * La lógica del bucle principal se ejecuta cada 33 ms
          * (más o menos 30 FPS o HZ).
