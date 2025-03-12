@@ -35,6 +35,64 @@ cpu_reset(struct cpu *self)
 }
 
 /*
+ * Procesa una instrucción individual y la añade a la memoria de instrucciones
+ * Esta función está realizada de esta forma para obtener un funcionamiento
+ * genérico para cpu_load_insts_from_file y cpu_load_insts_from_str
+ * Retorna: 0 si todo bien, 1 si hay error en la instrucción, 2 si es END
+ */
+static int32_t 
+cpu_parse_and_load_inst(struct cpu *self, const char *inst_str, 
+                              size_t *instmem_end)
+{
+    if (*instmem_end >= INSTS_MAX) {
+        return -1;
+    }
+    struct inst *tmp = inst_from_str(inst_str);
+    bool is_end = false;
+    if (!tmp) {
+        char logstr[50];
+        sprintf(logstr, "Instrucción \"%s\" inválida, reemplazada por END\n",
+                inst_str);
+        msg_log(LOG_LEVEL_WARN, logstr);
+        tmp = inst_from_str("END");
+        if (!tmp) {
+            return 1;
+        }
+        is_end = true;
+    }
+
+    if (tmp->op == OP_END) {
+        is_end = true;
+    }
+    
+    self->instmem[*instmem_end] = *tmp;
+    free(tmp);
+    (*instmem_end) += 1;
+    
+    return (is_end)? 2 : 0;
+}
+
+/*
+ * Prepara la CPU para la ejecución una vez inicializado instmem
+ * Realiza la copia de la primera instrucción en instmem a IR para que la CPU
+ * esté lista. Es requerido que instmem ya esté inicializado con anterioridad
+ * caso contrario esta función no hará nada útil.
+ */
+static void
+cpu_prepare(struct cpu *self)
+{
+    self->state = CPU_READY;
+    /** TODO: Hacer esta verificación en tiempo de compilación */
+    /**
+     * Esta verificación es realizada debido a que IR es un int64_t y la
+     * estructura inst está hecha de forma que ocupe menos de 64 bits,
+     * verificamos por si acaso que esta quepa sin problemas
+     */
+    assert(sizeof(self->instmem[0]) <= sizeof(self->regs[REG_IR]));
+    memcpy(&self->regs[REG_IR], &self->instmem[0], sizeof(self->instmem[0]));
+}
+
+/*
  * Carga un archivo de instrucciones para ser ejecutada por la CPU.
  * Básicamente inicializa un archivo como memoria de ejecución de
  * instrucciones.
@@ -60,45 +118,14 @@ cpu_load_insts_from_file(struct cpu *self, const char *filename)
         for (size_t i = 0; buf[i] != '\0'; i += 1) {
             buf[i] = toupper(buf[i]);
         }
-        /*
-         * TODO: factorizar el código de modo que no tengamos que
-         * estar usando malloc seguido de free para las instrucciones.
-         */
-        struct inst *tmp = inst_from_str(buf);
-        if (tmp->op == OP_END) {
+        int32_t result = cpu_parse_and_load_inst(self, buf, &instmem_end);
+        if (result == 1) {
+            return 1;
+        } else if (result == 2) {
             end_found = true;
         }
-        if (!tmp) {
-            char logstr[50];
-            /*
-             * La forma en que registra el error es distinta para el front-end
-             * y la CPU, ahorita imprimimos en stderr para simplicidad.
-             * TODO: definir como manejaremos las impresiones desde la CPU de
-             * forma que sea compatible tanto en pruebas unitarias como en el
-             * front-end.
-             */
-            sprintf(logstr, "Instrucción \"%s\" inválida, remplazada por END\n",
-                    buf);
-            msg_log(LOG_LEVEL_WARN, logstr);
-            tmp = inst_from_str("END");
-            self->instmem[instmem_end] = *tmp;
-            free(tmp);
-            return 1;
-        }
-        self->instmem[instmem_end] = *tmp;
-        free(tmp);
-        instmem_end += 1;
     }
-    self->state = CPU_READY;
-    /*
-     * Recemos porque esta magia negra funcione, estamos copiando la primera
-     * instrucción de instmem a IR confiando en que struct inst es de un
-     * tamaño menor y cabe en IR.
-     * Esta verificación de assert debería ser estática no de ejecución
-     * TODO: verificar este assert en compilación.
-     */
-    assert(sizeof(self->instmem[0]) <= sizeof(self->regs[REG_IR]));
-    memcpy(&self->regs[REG_IR], &self->instmem[0], sizeof(self->instmem[0]));
+    cpu_prepare(self);
     return 0;
 }
 
@@ -118,59 +145,22 @@ cpu_load_insts_from_str(struct cpu *self, char *str)
          */
         return 2;
     }
-    struct inst *tmp = inst_from_str(whole_inst_tok);
-    self->instmem[instmem_end] = *tmp;
-    free(tmp);
-    if (instmem_end > INSTS_MAX) {
-        /*
-         * Nos pasamos del límite de instrucciones :(
-         */
-        return 2;
+    int32_t result = cpu_parse_and_load_inst(self, whole_inst_tok, &instmem_end);
+    if (result == 1) {
+        return 1;
+    } else if (result == 2) {
+        cpu_prepare(self);
+        return 0;
     }
-    instmem_end += 1;
-    /*
-     * Cuando encontremos END dejaremos de leer nuevas instrucciones
-     */
-    bool end_found = false;
-    while ((whole_inst_tok = strtok_r(NULL, "\n", &str_state)) && !end_found) {
-        if (strncmp(whole_inst_tok, "END", 3) == 0) {
-            end_found = true;
-        }
-        struct inst *tmp = inst_from_str(whole_inst_tok);
-        if (tmp->op == OP_END) {
-            end_found = true;
-        }
-        if (!tmp) {
-            char logstr[50];
-            /*
-             * La forma en que registra el error es distinta para el front-end
-             * y la CPU, ahorita imprimimos en stderr para simplicidad.
-             * TODO: definir como manejaremos las impresiones desde la CPU de
-             * forma que sea compatible tanto en pruebas unitarias como en el
-             * front-end.
-             */
-            sprintf(logstr, "Instrucción \"%s\" inválida, remplazada por END\n",
-                    whole_inst_tok);
-            msg_log(LOG_LEVEL_WARN, logstr);
-            tmp = inst_from_str("END");
-            self->instmem[instmem_end] = *tmp;
-            free(tmp);
+    while ((whole_inst_tok = strtok_r(NULL, "\n", &str_state))) {
+        result = cpu_parse_and_load_inst(self, whole_inst_tok, &instmem_end);
+        if (result == 1) {
             return 1;
+        } else if (result == 2) {
+            break;
         }
-        self->instmem[instmem_end] = *tmp;
-        free(tmp);
-        instmem_end += 1;
-        if (instmem_end > INSTS_MAX) {
-            /*
-             * Nos pasamos del límite de instrucciones :(
-             */
-            return 2;
-        }
-    } 
-    self->state = CPU_READY;
-
-    assert(sizeof(self->instmem[0]) <= sizeof(self->regs[REG_IR]));
-    memcpy(&self->regs[REG_IR], &self->instmem[0], sizeof(self->instmem[0]));
+    }
+    cpu_prepare(self);
     return 0;
 }
 
