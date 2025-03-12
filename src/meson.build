@@ -4,8 +4,3 @@ cpu_sim_lib = library('cpu_sim_lib', sources,
   include_directories : includes,
   dependencies: ncurses # Esta no se va a ocupar cuando separemos front-end de simulador
 )
-main_test = executable('main', 'main.c',
-  include_directories : includes,
-  link_with : cpu_sim_lib,
-  dependencies : ncurses
-)
