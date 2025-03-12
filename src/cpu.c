@@ -69,7 +69,7 @@ cpu_load_insts_from_file(struct cpu *self, const char *filename)
             end_found = true;
         }
         if (!tmp) {
-            char logstr[50];
+            char logstr[100];
             /*
              * La forma en que registra el error es distinta para el front-end
              * y la CPU, ahorita imprimimos en stderr para simplicidad.
@@ -77,7 +77,7 @@ cpu_load_insts_from_file(struct cpu *self, const char *filename)
              * forma que sea compatible tanto en pruebas unitarias como en el
              * front-end.
              */
-            sprintf(logstr, "Instrucción \"%s\" inválida, remplazada por END\n",
+            snprintf(logstr, sizeof(logstr), "Instrucción \"%s\" inválida, remplazada por END\n",
                     buf);
             msg_log(LOG_LEVEL_WARN, logstr);
             tmp = inst_from_str("END");
