@@ -246,17 +246,6 @@ main(void) {
     regwin_update();
 
     struct timespec last_cpu_execution = { 0 };
-    /*char prog_one[] = "MoV Ax -13\n"
-        "add bx 31\n"
-        "inc ax\n"
-        "inc ax\n"
-        "dec bx\n"
-        "Mul cX 3140\n"
-        "aDD ax 10\n"
-        "div bx ax\n"
-        "end\n"
-        "MOV RAX 3\n";
-    cpu_load_insts_from_str(cpu, prog_one);*/
     while (true) {
         enum prompt_status status = prompt_update(&prompt);
         if (status == PROMPT_STATUS_INSTRUCTION_DECODED) {
@@ -264,8 +253,6 @@ main(void) {
             free(prompt.decoded_inst);
             prompt.decoded_inst = NULL;
         }
-
-        //cpu_load_insts_from_file(cpu, prompt.decoded_inst->arg1);
 
         if (cpu->state == CPU_READY) {
             struct timespec curr, delta;
@@ -289,7 +276,11 @@ main(void) {
          * La lógica del bucle principal se ejecuta cada 33 ms
          * (más o menos 30 FPS o HZ).
          */
-        usleep(33E3);
+        struct timespec update_delay = {
+            .tv_sec = 0,
+            .tv_nsec = 33E6
+        };
+        clock_nanosleep(CLOCK_MONOTONIC, 0, &update_delay, NULL);
     }
     endwin();
     return 0;
