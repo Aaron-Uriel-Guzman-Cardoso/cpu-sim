@@ -118,7 +118,7 @@ main(void)
 {
     struct cpu *cpu = cpu_new();
     cpu_load_insts_from_str(cpu, prog_one);
-    for (int32_t i = 0; i < 7; i += 1) {
+    for (int32_t i = 0; i < 8; i += 1) {
         assert(cpu_next_cycle(cpu) == 0);
         assert(cpu->state == CPU_READY);
     }
@@ -129,7 +129,7 @@ main(void)
 
     cpu_reset(cpu);
     cpu_load_insts_from_str(cpu, prog_two);
-    for (int32_t i = 0; i < 89; i += 1) {
+    for (int32_t i = 0; i < 90; i += 1) {
         assert(cpu_next_cycle(cpu) == 0);
         assert(cpu->state == CPU_READY);
     }
