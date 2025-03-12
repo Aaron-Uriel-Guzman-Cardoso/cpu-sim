@@ -155,12 +155,12 @@ int32_t
 regwin_update(void)
 {
     clear_window_part(reg, 1, 1, 5, 78);
-    mvwprintw(reg, 2, 2, "AX: %d", cpu->regs[REG_AX]);
-    mvwprintw(reg, 3, 2, "BX: %d", cpu->regs[REG_BX]);
-    mvwprintw(reg, 4, 2, "CX: %d", cpu->regs[REG_CX]);
+    mvwprintw(reg, 2, 2, "AX: %ld", cpu->regs[REG_AX]);
+    mvwprintw(reg, 3, 2, "BX: %ld", cpu->regs[REG_BX]);
+    mvwprintw(reg, 4, 2, "CX: %ld", cpu->regs[REG_CX]);
     mvwprintw(reg, 5, 2, "freq: %g Hz", 1.0/cpu_period.tv_sec);
-    mvwprintw(reg, 2, 35, "DX: %d", cpu->regs[REG_DX]);
-    mvwprintw(reg, 3, 35, "PC: %d", cpu->regs[REG_PC]);
+    mvwprintw(reg, 2, 35, "DX: %ld", cpu->regs[REG_DX]);
+    mvwprintw(reg, 3, 35, "PC: %ld", cpu->regs[REG_PC]);
     char current_inst[50];
     inst_to_str((struct inst *)&cpu->regs[REG_IR], current_inst, 50);
     mvwprintw(reg, 4, 35, "IR: %s", current_inst);
@@ -199,10 +199,7 @@ eval(struct cmd *cmd) {
             snprintf(mensaje, sizeof(mensaje), "Cargando archivo: %s\n", cmd->arg1);
             msg_log(LOG_LEVEL_INFO, mensaje);
 
-            // Reset CPU state before loading new program
             cpu_reset(cpu);
-            
-            // Try to load instructions
             int32_t result = cpu_load_insts_from_file(cpu, cmd->arg1);
             if (result == 0) {
                 msg_log(LOG_LEVEL_INFO, "Archivo cargado con éxito.\n");
@@ -246,6 +243,7 @@ main(void) {
 
     box(prompt.win, 0, 0);
     mvwprintw(prompt.win, 0, 35, "|Prompt|");
+    regwin_update();
 
     struct timespec last_cpu_execution = { 0 };
     /*char prog_one[] = "MoV Ax -13\n"

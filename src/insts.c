@@ -455,5 +455,16 @@ inst_to_str(const struct inst *self, char *str, size_t size) {
     } else {
         reg_to_str(self->rb, arg2, 6);
     }
+    /*
+     * Hacemos cadena vacía a los argumentos para las operaciones no toman a
+     * dichos argumentos.
+     */
+    if (self->op == OP_END) {
+        arg1[0] = '\0';
+        arg2[0] = '\0';
+    }
+    else if (self->op == OP_INC || self->op == OP_DEC) {
+        arg2[0] = '\0';
+    } 
     snprintf(str, size, "%s %s %s", op, arg1, arg2);
 }

@@ -44,36 +44,50 @@ cpu_load_insts_from_file(struct cpu *self, const char *filename)
 {
     if (!self || !filename) { return -1; }
     FILE *instfile = fopen(filename, "r");
-    if (instfile) {
-        size_t instmem_end = 0;
-        while (feof(instfile)) {
-            char buf[32];
-            if (instmem_end > INSTS_MAX) {
-                /*
-                 * Nos pasamos del límite de instrucciones :(
-                 */
-                return 2;
-            }
-            if (fgets(buf, sizeof(buf), instfile)) {
-                for (size_t i = 0; buf[i] != '\0'; i += 1) {
-                    buf[i] = toupper(buf[i]);
-                }
-                /*
-                 * TODO: factorizar el código de modo que no tengamos que
-                 * estar usando malloc seguido de free para las instrucciones.
-                 */
-                struct inst *tmp = inst_from_str(buf);
-                self->instmem[instmem_end] = *tmp;
-                free(tmp);
-                instmem_end += 1;
-            }
-            else {
-                /*
-                 * Hubo un error al leer la línea del archivo.
-                 */
-                return 1;
-            }
+    if (!instfile) {
+        return 2;
+    }
+    size_t instmem_end = 0;
+    char buf[32];
+    bool end_found = false;
+    while (fgets(buf, sizeof(buf), instfile) && !end_found) {
+        if (instmem_end > INSTS_MAX) {
+            /*
+             * Nos pasamos del límite de instrucciones :(
+             */
+            return 2;
         }
+        for (size_t i = 0; buf[i] != '\0'; i += 1) {
+            buf[i] = toupper(buf[i]);
+        }
+        /*
+         * TODO: factorizar el código de modo que no tengamos que
+         * estar usando malloc seguido de free para las instrucciones.
+         */
+        struct inst *tmp = inst_from_str(buf);
+        if (tmp->op == OP_END) {
+            end_found = true;
+        }
+        if (!tmp) {
+            char logstr[50];
+            /*
+             * La forma en que registra el error es distinta para el front-end
+             * y la CPU, ahorita imprimimos en stderr para simplicidad.
+             * TODO: definir como manejaremos las impresiones desde la CPU de
+             * forma que sea compatible tanto en pruebas unitarias como en el
+             * front-end.
+             */
+            sprintf(logstr, "Instrucción \"%s\" inválida, remplazada por END\n",
+                    buf);
+            msg_log(LOG_LEVEL_WARN, logstr);
+            tmp = inst_from_str("END");
+            self->instmem[instmem_end] = *tmp;
+            free(tmp);
+            return 1;
+        }
+        self->instmem[instmem_end] = *tmp;
+        free(tmp);
+        instmem_end += 1;
     }
     self->state = CPU_READY;
     /*
@@ -123,6 +137,9 @@ cpu_load_insts_from_str(struct cpu *self, char *str)
             end_found = true;
         }
         struct inst *tmp = inst_from_str(whole_inst_tok);
+        if (tmp->op == OP_END) {
+            end_found = true;
+        }
         if (!tmp) {
             char logstr[50];
             /*
