@@ -5,7 +5,7 @@ inc ax
 dec bx
 Mul cX 3140
 aDD ax 10
-div bx rax
+div bx ax
 end
-MOV RAX 3
+MOV AX 3
 

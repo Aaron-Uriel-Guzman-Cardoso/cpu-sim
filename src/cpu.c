@@ -50,9 +50,14 @@ cpu_parse_and_load_inst(struct cpu *self, const char *inst_str,
     struct inst *tmp = inst_from_str(inst_str);
     bool is_end = false;
     if (!tmp) {
-        char logstr[50];
-        sprintf(logstr, "Instrucción \"%s\" inválida, reemplazada por END\n",
-                inst_str);
+        char logstr[100];
+        /**
+         * TODO: imprimir de forma genérica desde la CPU para compatibilidad
+         *       con front-end de ncurses y para diagnóstico en las pruebas
+         *       unitarias.
+         */
+        snprintf(logstr, sizeof(logstr),
+                 "Instrucción \"%s\" inválida, remplazada por END\n", inst_str);
         msg_log(LOG_LEVEL_WARN, logstr);
         tmp = inst_from_str("END");
         if (!tmp) {
