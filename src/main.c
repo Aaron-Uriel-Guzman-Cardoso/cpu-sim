@@ -229,6 +229,7 @@ main(void) {
     curs_set(1);
 
     msg_init();
+    list_init();
 
     struct prompt prompt;
     reg = newwin(7, 80, 10, 0);
