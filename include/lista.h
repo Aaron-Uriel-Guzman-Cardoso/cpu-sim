@@ -25,6 +25,7 @@ typedef struct Cabecera {
 void crearLista(Lista *);
 PCB* listaCreaNodo(int ax, int bx, int cx, int dx, int pc, const char *ir, const char *file_name);
 void listaInsertarFinal(Lista *, PCB *);
+PCB* listaBuscarPID(Lista *, int);
 PCB* listaExtraeInicio(Lista *);
 PCB* listaExtraePID(Lista *, int);
 void liberarNodo(PCB *);

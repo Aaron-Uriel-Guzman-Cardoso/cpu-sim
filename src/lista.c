@@ -49,6 +49,15 @@ void listaInsertarFinal(Lista* l, PCB* nuevo_nodo) {
     }
 }
 
+PCB* listaBuscarPID(Lista *l, int PID) {
+    PCB *nodo;
+    nodo = l -> inicio;
+    while(nodo != NULL && nodo -> PID != PID) {
+        nodo = nodo -> sig;
+    }
+    return nodo;
+}
+
 PCB* listaExtraeInicio(Lista *l) {
     PCB *nodo;
     if(l -> inicio != NULL){
