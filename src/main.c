@@ -11,6 +11,7 @@
 #include <msg.h>
 #include <ncurses_utilities.h>
 #include <insts.h>
+#include <lista.h>
 
 #include "../include/cpu.h"
 

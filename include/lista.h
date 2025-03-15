@@ -22,8 +22,12 @@ typedef struct Cabecera {
     unsigned contador;
 } Lista;
 
-void crearLista(PCB *);
+void crearLista(Lista *);
 PCB* listaCreaNodo(int ax, int bx, int cx, int dx, int pc, const char *ir, const char *file_name);
 void listaInsertarFinal(Lista *, PCB *);
+PCB* listaExtraeInicio(Lista *);
+PCB* listaExtraePID(Lista *, int);
+void liberarNodo(PCB *);
+void liberarLista(Lista *);
 
 #endif // LISTA_H
