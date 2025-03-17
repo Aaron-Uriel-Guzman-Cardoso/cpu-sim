@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 WINDOW *msg;
+WINDOW *list;
 
 /*
  * Inicializa la ventana de mensajes para que esta pueda pueda ser utilizada.
@@ -20,6 +21,15 @@ msg_init(void)
     msg = newwin(10, 80, 0, 0);
     box(msg, 0, 0);
     wrefresh(msg);
+    return 0;
+}
+
+int32_t
+list_init(void)
+{
+    list = newwin(10, 80, 0, 85);
+    box(list, 0, 0);
+    wrefresh(list);
     return 0;
 }
 
