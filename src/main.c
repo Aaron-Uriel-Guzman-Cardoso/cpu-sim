@@ -183,8 +183,7 @@ regwin_update(void)
  */
 
 int32_t 
-eval(struct cmd *cmd) {
-    
+eval(struct cmd *cmd, Lista *listos) { 
     if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
         msg_log(LOG_LEVEL_INFO, "Saliendo del programa...\n");
         endwin();
@@ -200,27 +199,156 @@ eval(struct cmd *cmd) {
             snprintf(mensaje, sizeof(mensaje), "Cargando archivo: %s\n", cmd->arg1);
             msg_log(LOG_LEVEL_INFO, mensaje);
 
+            // Cargar el archivo en la CPU
             cpu_reset(cpu);
             int32_t result = cpu_load_insts_from_file(cpu, cmd->arg1);
+            
             if (result == 0) {
                 msg_log(LOG_LEVEL_INFO, "Archivo cargado con éxito.\n");
+
+                // Crear un nuevo proceso y lo agrega a la lista
+                PCB *nuevo_proceso = listaCreaNodo(0, 0, 0, 0, 0, "", cmd->arg1);
+                if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
+                    listaInsertarFinal(listos, nuevo_proceso);
+                    msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
+                } else {
+                    msg_log(LOG_LEVEL_ERROR, "Error al crear el proceso.\n");
+                    if (nuevo_proceso != NULL) {
+                        free(nuevo_proceso); 
+                    }
+                }
             } else {
                 snprintf(mensaje, sizeof(mensaje), "Error al cargar archivo %s (código: %d)\n", 
-                        cmd->arg1, result);
+                cmd->arg1, result);
                 msg_log(LOG_LEVEL_ERROR, mensaje);
             }
         }
     }
-
     else { 
-        msg_log( LOG_LEVEL_ERROR, "Comando nulo.");
+        msg_log(LOG_LEVEL_ERROR, "Comando nulo.");
         return -1;
     }
 
     return 0;
 }
 
-int
+void inicializarListas(Lista *listos, Lista *ejecucion, Lista *terminados) {
+    crearLista(listos);
+    crearLista(ejecucion);
+    crearLista(terminados);
+}
+
+void cargarProceso(Lista *listos, const char *fileName) {
+    PCB *proceso = listaCreaNodo(0, 0, 0, 0, 0, "", fileName);
+    if (proceso != NULL && proceso->programa != NULL) {
+        listaInsertarFinal(listos, proceso);
+
+        char mensaje[300];
+        snprintf(mensaje, sizeof(mensaje), "Proceso cargado: %s\n", fileName);
+        msg_log(LOG_LEVEL_INFO, mensaje);
+
+    } else {
+
+        char mensaje[300];
+        snprintf(mensaje, sizeof(mensaje), "Error al cargar el proceso: %s\n", fileName);
+        msg_log(LOG_LEVEL_INFO, mensaje);
+
+        if (proceso != NULL) {
+            free(proceso);
+        }
+    }
+}
+
+void ejecutarProcesos(Lista *listos, Lista *ejecucion, Lista *terminados, int *quantum, const int MAXQUANTUM) {
+    // Si no hay proceso en ejecución y hay procesos en Listos, mover el primero a Ejecución
+    if (ejecucion->inicio == NULL && listos->inicio != NULL) {
+        PCB *proceso = listaExtraeInicio(listos);
+        listaInsertarFinal(ejecucion, proceso);
+        *quantum = 0; // Reiniciar el quantum
+    }
+
+    // Si hay un proceso en ejecución, ejecutar una instrucción
+    if (ejecucion->inicio != NULL) {
+        PCB *proceso = ejecucion->inicio;
+
+        // Leer la siguiente instrucción del archivo
+        char instruccion[100];
+        if (fgets(instruccion, sizeof(instruccion), proceso->programa) != NULL) {
+            // Actualizar el registro IR con la instrucción leída
+            strncpy(proceso->IR, instruccion, sizeof(proceso->IR) - 1);
+            proceso->IR[sizeof(proceso->IR) - 1] = '\0'; 
+
+            // Incrementar el contador de programa (PC)
+            proceso->PC++;
+
+            // Incrementar el quantum
+            (*quantum)++;
+
+            // Si el quantum alcanzó el máximo, mover el proceso a Listos
+            if (*quantum >= MAXQUANTUM) {
+                PCB *proceso = listaExtraeInicio(ejecucion);
+                listaInsertarFinal(listos, proceso);
+                *quantum = 0; // Reiniciar el quantum
+            }
+        } else {
+            // Si no hay más instrucciones, mover el proceso a Terminados
+            PCB *proceso = listaExtraeInicio(ejecucion);
+            listaInsertarFinal(terminados, proceso);
+            fclose(proceso->programa); // Cerrar el archivo del proceso
+
+            char mensaje[300];
+            snprintf(mensaje, sizeof(mensaje), "Proceso terminado: PID %d\n", proceso->PID);
+            msg_log(LOG_LEVEL_INFO, mensaje);
+            
+        }
+    }
+}
+
+void mostrarEstado(WINDOW *list, Lista *ejecucion, Lista *listos, Lista *terminados) {
+    clear_window_part(list, 1, 2, 11, 76);
+
+    // Mostrar el proceso en ejecución
+    mvwprintw(list, 1, 2, "......PROCESADOR......");
+    if (ejecucion->inicio != NULL) {
+        PCB *proceso = ejecucion->inicio;
+        mvwprintw(list, 2, 2, "AX:[%d] PC:[%d] SIG:[%d]", proceso->AX, proceso->PC, proceso->sig ? proceso->sig->PID : -1);
+        mvwprintw(list, 3, 2, "BX:[%d] IR:[%s]", proceso->BX, proceso->IR);
+        mvwprintw(list, 4, 2, "CX:[%d] PID:[%d]", proceso->CX, proceso->PID);
+        mvwprintw(list, 5, 2, "DX:[%d] NAME:[%s]", proceso->DX, proceso->fileName);
+    } else {
+        clear_window_part(list, 2, 2, 4, 76); 
+    }
+
+    // Mostrar la lista de procesos listos
+    mvwprintw(list, 7, 2, "......LISTA......");
+    PCB *actual = listos->inicio;
+    int fila = 8;
+    while (actual != NULL && fila < 10) { 
+        mvwprintw(list, fila, 2, "PID:[%d] FILE:[%s]", actual->PID, actual->fileName);
+        actual = actual->sig;
+        fila++;
+    }
+    if (fila < 10) {
+        clear_window_part(list, fila, 2, 10 - fila, 76); 
+    }
+
+    // Mostrar la lista de procesos terminados
+    mvwprintw(list, 9, 2, "......TERMINADOS......");
+    actual = terminados->inicio;
+    fila = 10;
+    while (actual != NULL && fila < 18) { 
+        mvwprintw(list, fila, 2, "PID:[%d] FILE:[%s]", actual->PID, actual->fileName);
+        actual = actual->sig;
+        fila++;
+    }
+    if (fila < 18) {
+        clear_window_part(list, fila, 2, 12 - fila, 76); 
+    }
+
+    wrefresh(list); 
+}
+
+int 
 main(void) {
     cpu = cpu_new();
     initscr();
@@ -243,35 +371,42 @@ main(void) {
     prompt.hist.size = 0;
     prompt.hist_index = 0;
 
+    // DECLARACIÓN DE LA VENTANA DE LISTA
+    WINDOW *list = newwin(20, 80, 0, 85);
+    box(list, 0, 0);
+    wrefresh(list);
+
     box(prompt.win, 0, 0);
     mvwprintw(prompt.win, 0, 35, "|Prompt|");
     regwin_update();
 
     struct timespec last_cpu_execution = { 0 };
-    /*char prog_one[] = "MoV Ax -13\n"
-        "add bx 31\n"
-        "inc ax\n"
-        "inc ax\n"
-        "dec bx\n"
-        "Mul cX 3140\n"
-        "aDD ax 10\n"
-        "div bx ax\n"
-        "end\n"
-        "MOV RAX 3\n";
-    cpu_load_insts_from_str(cpu, prog_one);*/
+
+    // Inicializar las listas de procesos
+    Lista listos, ejecucion, terminados;
+    inicializarListas(&listos, &ejecucion, &terminados);
+
+    // Inicializar el quantum
+    int quantum = 0;
+    const int MAXQUANTUM = 5;
+
     while (true) {
         enum prompt_status status = prompt_update(&prompt);
         if (status == PROMPT_STATUS_INSTRUCTION_DECODED) {
-            eval(prompt.decoded_inst);
+            eval(prompt.decoded_inst, &listos);
             free(prompt.decoded_inst);
             prompt.decoded_inst = NULL;
         }
 
-        //cpu_load_insts_from_file(cpu, prompt.decoded_inst->arg1);
+        // Ejecutar procesos
+        ejecutarProcesos(&listos, &ejecucion, &terminados, &quantum, MAXQUANTUM);
 
+        // Mostrar el estado en la ventana de list
+        mostrarEstado(list, &ejecucion, &listos, &terminados);
+
+        // Lógica de la CPU
         if (cpu->state == CPU_READY) {
             struct timespec curr, delta;
-            
             clock_gettime(CLOCK_MONOTONIC, &curr);
             delta.tv_sec = curr.tv_sec - last_cpu_execution.tv_sec;
             delta.tv_nsec = curr.tv_nsec - last_cpu_execution.tv_nsec;
@@ -287,13 +422,21 @@ main(void) {
 
         wrefresh(prompt.win);
         wrefresh(reg);
-        /*
-         * La lógica del bucle principal se ejecuta cada 33 ms
-         * (más o menos 30 FPS o HZ).
-         */
-        usleep(33E3);
+        wrefresh(list); // Actualizar la ventana de list_log
+        usleep(33E3); // Esperar 33 ms
     }
+
+    // Liberar la memoria
+    liberarLista(&listos);
+    liberarLista(&ejecucion);
+    liberarLista(&terminados);
+
     endwin();
     return 0;
 }
 
+//DETALLES
+//SE ESCRIBE MAL MIENTRAS SE EJECUTA LA PARTE DE LISTAS
+//NO AUMENTA EL VALOR DEL PID
+//NO SE REFRESCA CUANDO SE LLENA LA LISTA DE TERMINADOS, NO MUESTRA LOS MAS NUEVOS
+//SE EJECUTAN DEMASIADO RAPIDO LOS PROCESOS
