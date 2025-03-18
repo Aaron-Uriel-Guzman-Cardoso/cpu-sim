@@ -11,6 +11,8 @@
 #include <insts.h>
 #include <lista.h>
 
+static int globalPID = 1;
+
 void crearLista(Lista *l) {
     l -> inicio = l -> fin = NULL;
     l -> contador = 0;
@@ -24,7 +26,8 @@ PCB* listaCreaNodo(int ax, int bx, int cx, int dx, int pc, const char *ir, const
         nuevo_nodo->CX = 0;
         nuevo_nodo->DX = 0;
         nuevo_nodo->PC = 0;
-        nuevo_nodo->PID = 0;
+        nuevo_nodo->PID = globalPID++;
+        
         nuevo_nodo->IR[0] = '\0';
         strcpy(nuevo_nodo->fileName, file_name);
         nuevo_nodo->programa = fopen(file_name, "r");

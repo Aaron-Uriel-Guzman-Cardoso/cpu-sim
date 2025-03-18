@@ -47,7 +47,10 @@ enum prompt_status {
 
 WINDOW *reg;
 struct cpu *cpu; /* Tendremos una única CPU en el simulador */
-struct timespec cpu_period = { 2, 0 }; /* Frecuencia de ejecucón de la cpu */ 
+struct timespec cpu_period = { 0, 500000000 }; /* Frecuencia de ejecucón de la cpu */ 
+
+struct timespec last_process_update = { 0 };
+struct timespec process_update_period = { 0, 500000000 }; // Actualizar cada 500 ms
 
 struct cmd *
 instruction_decode(const char *buf)
@@ -401,23 +404,33 @@ main(void) {
         ejecutarProcesos(&listos, &ejecucion, &terminados, &quantum, MAXQUANTUM);
 
         // Mostrar el estado en la ventana de list
-        mostrarEstado(list, &ejecucion, &listos, &terminados);
-
-        // Lógica de la CPU
         if (cpu->state == CPU_READY) {
             struct timespec curr, delta;
             clock_gettime(CLOCK_MONOTONIC, &curr);
             delta.tv_sec = curr.tv_sec - last_cpu_execution.tv_sec;
             delta.tv_nsec = curr.tv_nsec - last_cpu_execution.tv_nsec;
-            if (delta.tv_sec > cpu_period.tv_sec) {
+            if (delta.tv_sec > cpu_period.tv_sec || 
+                (delta.tv_sec == cpu_period.tv_sec && delta.tv_nsec >= cpu_period.tv_nsec)) {
                 int result = cpu_next_cycle(cpu);
-                if(result == 3) {
+                if (result == 3) {
                     msg_log(LOG_LEVEL_INFO, "Programa terminado. \n");
                 }
                 last_cpu_execution = curr;
                 regwin_update();
             }
         }
+    
+        // Actualizar la ventana de procesos
+        struct timespec curr, delta;
+        clock_gettime(CLOCK_MONOTONIC, &curr);
+        delta.tv_sec = curr.tv_sec - last_process_update.tv_sec;
+        delta.tv_nsec = curr.tv_nsec - last_process_update.tv_nsec;
+        if (delta.tv_sec > process_update_period.tv_sec || 
+            (delta.tv_sec == process_update_period.tv_sec && delta.tv_nsec >= process_update_period.tv_nsec)) {
+            mostrarEstado(list, &ejecucion, &listos, &terminados);
+            last_process_update = curr;
+        }
+    
 
         wrefresh(prompt.win);
         wrefresh(reg);
@@ -428,7 +441,7 @@ main(void) {
          */
         struct timespec update_delay = {
             .tv_sec = 0,
-            .tv_nsec = 33E6
+            .tv_nsec =33E6
         };
         clock_nanosleep(CLOCK_MONOTONIC, 0, &update_delay, NULL);
     }
