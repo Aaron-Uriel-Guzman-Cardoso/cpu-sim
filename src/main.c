@@ -47,7 +47,10 @@ enum prompt_status {
 
 WINDOW *reg;
 struct cpu *cpu; /* Tendremos una única CPU en el simulador */
-struct timespec cpu_period = { 2, 0 }; /* Frecuencia de ejecucón de la cpu */ 
+struct timespec cpu_period = { 0, 500000000 }; /* Frecuencia de ejecucón de la cpu */ 
+
+struct timespec last_process_update = { 0 };
+struct timespec process_update_period = { 0, 500000000 }; // Actualizar cada 500 ms
 
 struct cmd *
 instruction_decode(const char *buf)
@@ -429,7 +432,7 @@ main(void) {
          */
         struct timespec update_delay = {
             .tv_sec = 0,
-            .tv_nsec = 33E6
+            .tv_nsec =33E6
         };
         clock_nanosleep(CLOCK_MONOTONIC, 0, &update_delay, NULL);
     }

@@ -3,3 +3,6 @@
 .cache
 build/
 Session.vim
+cpu-o
+PROG
+P_END
