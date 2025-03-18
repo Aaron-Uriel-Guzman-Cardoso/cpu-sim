@@ -76,9 +76,33 @@ instruction_decode(const char *buf)
     return inst;
 }
 
+
+int32_t
+regwin_update(void)
+{
+    clear_window_part(reg, 1, 1, 5, 78);
+    struct cpu_context context = cpu_dump_context(cpu);
+    mvwprintw(reg, 2, 2, "AX: %ld", context.regs[REG_AX]);
+    mvwprintw(reg, 3, 2, "BX: %ld", context.regs[REG_BX]);
+    mvwprintw(reg, 4, 2, "CX: %ld", context.regs[REG_CX]);
+    mvwprintw(reg, 5, 2, "freq: %g Hz", cpu_get_freq(cpu));
+    mvwprintw(reg, 2, 35, "DX: %ld", context.regs[REG_DX]);
+    mvwprintw(reg, 3, 35, "PC: %ld", context.regs[REG_PC]);
+    char current_inst[50];
+    inst_to_str((struct inst *)&context.regs[REG_IR], current_inst, 50);
+    mvwprintw(reg, 4, 35, "IR: %s", current_inst);
+    wrefresh(reg);
+    return 0;
+}
+
 enum prompt_status
 prompt_update(struct prompt *prompt)
 {
+    /**
+     * TODO: independizar las cola circular del código de la interfaz de
+     *       usuario, para que sea genérica y la podamos usar en otros
+     *       lugares.
+     */
     static char buf[200];
     static int32_t buflen = 0;
     int c;
@@ -116,7 +140,14 @@ prompt_update(struct prompt *prompt)
                 snprintf(buf, sizeof(buf), "%s %s %s", prompt->hist.history[prompt->hist_index].name, prompt->hist.history[prompt->hist_index].arg1, prompt->hist.history[prompt->hist_index].arg2);
                 buflen = strlen(buf);
             }
-        } else if (buflen < 199) {
+        } else if (c == KEY_LEFT) {
+            cpu_set_freq(cpu, cpu_get_freq(cpu) / 2);
+            regwin_update();
+        } else if (c == KEY_RIGHT) {
+            cpu_set_freq(cpu, cpu_get_freq(cpu) * 2);
+            regwin_update();
+        }
+         else if (buflen < 199) {
             buf[buflen] = c;
             buf[buflen + 1] = 0;
             buflen += 1;
@@ -152,22 +183,6 @@ prompt(void)
 }
 
 
-int32_t
-regwin_update(void)
-{
-    clear_window_part(reg, 1, 1, 5, 78);
-    mvwprintw(reg, 2, 2, "AX: %ld", cpu->regs[REG_AX]);
-    mvwprintw(reg, 3, 2, "BX: %ld", cpu->regs[REG_BX]);
-    mvwprintw(reg, 4, 2, "CX: %ld", cpu->regs[REG_CX]);
-    mvwprintw(reg, 5, 2, "freq: %g Hz", 1.0/cpu_period.tv_sec);
-    mvwprintw(reg, 2, 35, "DX: %ld", cpu->regs[REG_DX]);
-    mvwprintw(reg, 3, 35, "PC: %ld", cpu->regs[REG_PC]);
-    char current_inst[50];
-    inst_to_str((struct inst *)&cpu->regs[REG_IR], current_inst, 50);
-    mvwprintw(reg, 4, 35, "IR: %s", current_inst);
-    wrefresh(reg);
-    return 0;
-}
 
 
 /*
@@ -379,8 +394,6 @@ main(void) {
     box(prompt.win, 0, 0);
     mvwprintw(prompt.win, 0, 35, "|Prompt|");
     regwin_update();
-
-    struct timespec last_cpu_execution = { 0 };
     // Inicializar las listas de procesos
     Lista listos, ejecucion, terminados;
     inicializarListas(&listos, &ejecucion, &terminados);
@@ -403,20 +416,8 @@ main(void) {
         // Mostrar el estado en la ventana de list
         mostrarEstado(list, &ejecucion, &listos, &terminados);
 
-        // Lógica de la CPU
-        if (cpu->state == CPU_READY) {
-            struct timespec curr, delta;
-            clock_gettime(CLOCK_MONOTONIC, &curr);
-            delta.tv_sec = curr.tv_sec - last_cpu_execution.tv_sec;
-            delta.tv_nsec = curr.tv_nsec - last_cpu_execution.tv_nsec;
-            if (delta.tv_sec > cpu_period.tv_sec) {
-                int result = cpu_next_cycle(cpu);
-                if(result == 3) {
-                    msg_log(LOG_LEVEL_INFO, "Programa terminado. \n");
-                }
-                last_cpu_execution = curr;
-                regwin_update();
-            }
+        if (cpu_sync(cpu)) {
+            regwin_update();
         }
 
         wrefresh(prompt.win);

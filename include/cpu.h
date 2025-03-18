@@ -5,30 +5,41 @@
 #include <stdio.h>
 #include <insts.h>
 
-
-enum cpu_state { 
-    CPU_READY,      /* Lista para ejecutar nueva instrucción */
-    CPU_HALT,       /* Se ejecutó END o final de archivo */
-    CPU_IR_ERROR    /* Instrucciones ilegales (¿será esto necesario?) */
+/*
+ * Posibles sucesos que pueden ocurrir durante la ejecución de la CPU.
+ * Estos indican eventos de utilidad para el sistema operativo que serán
+ * manejados por este mismo.
+ */
+enum cpu_event {
+    CPU_INSTRUCTION_EXECUTED,
+    CPU_INSTRUCTION_ILEGAL,     /* TODO: implementar funcionamiento */
+    CPU_INSTRUCTION_INVALID,    /* TODO: implementar funcionamiento */
+    CPU_REGISTER_OVERFLOW,      /* TODO: implementar funcionamiento */
+    CPU_DIVISION_BY_ZERO,       /* TODO: implementar funcionamiento */
+    CPU_HALT,
+    CPU_NONE
 };
 enum consts {
     INSTS_MAX = 128,
 };
 
-struct cpu {
+/*
+ * Estructura que representa el estado de la CPU en un momento dado, esta
+ * estructura será símplemente una copia de todos los registros de la CPU.
+ */
+struct cpu_context {
     int64_t regs[REG_LIMIT];
-    enum cpu_state state;
-    /*
-     * La memoria para las instrucciones será un arreglo de 128, esperando que
-     * ningún programa se acerque a esto.
-     * TODO: implementar arreglo dinámico para instrucciones
-     */
-    struct inst instmem[INSTS_MAX];
 };
+
+struct cpu;
 struct cpu *cpu_new(void);
 int32_t cpu_reset(struct cpu *self);
 int32_t cpu_load_insts_from_file(struct cpu *self, const char *filename);
 int32_t cpu_load_insts_from_str(struct cpu *self, char *str);
-int32_t cpu_next_cycle(struct cpu *self);
+struct cpu_context cpu_dump_context(struct cpu *self);
+void cpu_set_freq(struct cpu *self, double freq);
+double cpu_get_freq(struct cpu *self);
+int32_t cpu_sync(struct cpu *self);
+enum cpu_event cpu_poll_event(struct cpu *self);
 
 #endif

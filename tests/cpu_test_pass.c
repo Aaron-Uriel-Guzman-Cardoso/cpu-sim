@@ -1,139 +1,105 @@
+#include "insts.h"
 #include <assert.h>
 #include <cpu.h>
 #include <stdint.h>
+#include <string.h>
 
 /*
- * Definimos los programas como arreglos y no como strings literales porque
- * estos serán manipulados (ver uso de strtok_r en el código de cpu).
+ * Definimos los programas como una sola cadena y no como strings literales 
+ * pues uso strtok_r y este manipula memoria para tokenizar cadenas.
  */
-char prog_one[] = "MoV Ax -13\n"
-                  "add bx 31\n"
+char test_prog[] = "mov ax -12\n"
+                  "add bx +31\n"
                   "inc ax\n"
                   "inc ax\n"
                   "dec bx\n"
-                  "Mul cX 3140\n"
-                  "aDD ax 10\n"
-                  "div bx ax\n"
-                  "end\n"
-                  "MOV RAX 3\n";
-
-char prog_two[] =
-    "MOV AX 0000\n"
-    "MOV BX 0000\n"
-    "MOV CX 0000\n"
-    "MOV DX 0000\n"
-    "add AX 5\n"
-    "add AX 5\n"
-    "add AX 5\n"
-    "add AX 5\n"
-    "add AX 5\n"
-    "add AX 5\n"
-    "add AX 5\n"
-    "add AX 5\n"
-    "add AX 5\n"
-    "add AX 5\n"
-    "mov BX AX\n"
-    "mov cX AX\n"
-    "mov dX AX\n"
-    "mul AX 4\n"
-    "mul BX 4\n"
-    "mul CX 4\n"
-    "mul DX 4\n"
-    "DIV ax 2\n"
-    "DIV Bx 2\n"
-    "DIV cx 2\n"
-    "DIV dx 2\n"
-    "inc ax\n"
-    "add bx 2\n"
-    "DIV cx 2\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "dec Cx\n"
-    "Mul cx -3\n"
-    "ADD cx 100\n"
-    "SuB dx 4\n"
-    "inc dx\n"
-    "inc dx\n"
-    "inc dx\n"
-    "inc dx\n"
-    "inc dx\n"
-    "inc dx\n"
-    "inc dx\n"
-    "inc dx\n"
-    "end\n"
-    "MOV AX 0000\n"
-    "MOV BX 0000\n"
-    "MOV CX 0000\n"
-    "MOV DX 0000\n";
+                  "sub bx ax\n"
+                  "mov cx bx\n"
+                  "mul cx 50\n"
+                  "mov dx cx\n"
+                  "div cx 0\n"
+                  "div dx 7\n"
+                  "add dx 2147483638\n"
+                  "end\n";
 int
 main(void)
 {
     struct cpu *cpu = cpu_new();
-    cpu_load_insts_from_str(cpu, prog_one);
-    for (int32_t i = 0; i < 8; i += 1) {
-        assert(cpu_next_cycle(cpu) == 0);
-        assert(cpu->state == CPU_READY);
-    }
-    assert(cpu_next_cycle(cpu) == 3); /* La instrucción ejecutada es END*/
-    assert(cpu->state == CPU_HALT);
-    assert(cpu_next_cycle(cpu) == 0);
-    assert(cpu->state == CPU_HALT);
+    cpu_load_insts_from_str(cpu, test_prog);
+    /*
+     * Verificamos que la CPU esté correctamente inicializada haciendo un
+     * volcado de su contexto inicial y comparándolo con lo que esperamos..
+     */
+    {
+        const struct inst start_inst = {
+            .op = OP_MOVI,
+            .ra = REG_AX,
+            .imm = -12
+        };
+        struct cpu_context init_context = cpu_dump_context(cpu);
+        assert(init_context.regs[REG_AX] == 0);
+        assert(init_context.regs[REG_BX] == 0);
+        assert(init_context.regs[REG_CX] == 0);
+        assert(init_context.regs[REG_DX] == 0);
+        assert(init_context.regs[REG_PC] == 1);
 
-    cpu_reset(cpu);
-    cpu_load_insts_from_str(cpu, prog_two);
-    for (int32_t i = 0; i < 90; i += 1) {
-        assert(cpu_next_cycle(cpu) == 0);
-        assert(cpu->state == CPU_READY);
+        /**
+         * Comparamos miembro a miembro de la estructura porque parece que
+         * memcmp no lo hace bien :(.
+         * TODO: Hacer comparación usando memcmp en lugar de miembro a miebro
+         *       para poder ser más genéricos en cuanto al contenido de \struct inst
+         */
+        struct inst *ir_inst = (struct inst *)&init_context.regs[REG_IR];
+        assert(ir_inst->op == start_inst.op);
+        assert(ir_inst->ra == start_inst.ra);
+        assert(ir_inst->imm == start_inst.imm);
     }
-    assert(cpu_next_cycle(cpu) == 3);
-    assert(cpu->state == CPU_HALT);
+    /**
+     * TODO: implementar un mecanismo para que la CPU ejecute todas las
+     *       instrucciones de una, para aumentar el determinismo de las pruebas
+     *       (en algunas computadoras rápidas no podría alcanzar a ejecutar todo).
+     */
+    cpu_set_freq(cpu, 1E9); /* CPU a 1 GHz para que acabe rápido. */
+    assert(cpu_sync(cpu) == 1);
+    /*
+     * Consultamos los eventos que sucedieron en cada uno de los ciclos de la
+     * CPU.
+     */
+    assert(cpu_poll_event(cpu) == CPU_INSTRUCTION_EXECUTED);
+    assert(cpu_poll_event(cpu) == CPU_INSTRUCTION_EXECUTED);
+    assert(cpu_poll_event(cpu) == CPU_INSTRUCTION_EXECUTED);
+    assert(cpu_poll_event(cpu) == CPU_INSTRUCTION_EXECUTED);
+    assert(cpu_poll_event(cpu) == CPU_INSTRUCTION_EXECUTED);
+    assert(cpu_poll_event(cpu) == CPU_INSTRUCTION_EXECUTED);
+    assert(cpu_poll_event(cpu) == CPU_INSTRUCTION_EXECUTED);
+    assert(cpu_poll_event(cpu) == CPU_INSTRUCTION_EXECUTED);
+    assert(cpu_poll_event(cpu) == CPU_INSTRUCTION_EXECUTED);
+    assert(cpu_poll_event(cpu) == CPU_DIVISION_BY_ZERO);
+    assert(cpu_poll_event(cpu) == CPU_INSTRUCTION_EXECUTED);
+    assert(cpu_poll_event(cpu) == CPU_REGISTER_OVERFLOW);
+    assert(cpu_poll_event(cpu) == CPU_HALT);
+    assert(cpu_poll_event(cpu) == CPU_NONE);
+
+    /*
+     * Consultamos el estado al finalizar la ejecución de la CPU, conocemos
+     * los valores así que probaremos que sean los esperados.
+     */
+    {
+        const struct inst end_inst = {
+            .op = OP_END,
+            .ra = REG_AX,
+            .imm = 0
+        };
+        struct cpu_context end_context = cpu_dump_context(cpu);
+        assert(end_context.regs[REG_AX] == -10);
+        assert(end_context.regs[REG_BX] == 40);
+        assert(end_context.regs[REG_CX] == 2000);
+        assert(end_context.regs[REG_DX] == 285);
+        assert(end_context.regs[REG_PC] == 13);
+        struct inst *ir_inst = (struct inst *)&end_context.regs[REG_IR];
+        assert(ir_inst->op == end_inst.op);
+        assert(ir_inst->ra == end_inst.ra);
+        assert(ir_inst->imm == end_inst.imm);
+    }
     return 0;
 }
