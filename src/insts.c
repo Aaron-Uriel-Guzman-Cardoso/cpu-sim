@@ -12,8 +12,9 @@
 enum reg reg_from_str(const char *str);
 enum op op_from_str(const char *str, bool is_immediate);
 
-/*
- * Convierte str a un formato de instrucción procesable por la CPU.
+/**
+ * \brief Convierte str a un formato de instrucción procesable por la CPU.
+ * 
  * En caso de no haber una conversión válida se regresará NULL.
  */
 struct inst *

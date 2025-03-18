@@ -387,7 +387,10 @@ cpu_prepare(struct cpu *self)
  * 
  * Toma el archiivo especificado y lo carga para su procesamiento en la CPU,
  * cargar las instrucciones será un paso necesario para poder ejecutar la CPU.
- * \return Si hubo error al cargar las instrucciones desde el archivo
+ * \return Si hubo error al cargar las instrucciones desde el archivo:
+ *          - 0 no hubo error
+ *          - 1 hubo error al leer una instrucción del archivo
+ *          - 2 se llenó la memoria de instrucciones 
  */
 int32_t
 cpu_load_insts_from_file(struct cpu *self, const char *filename)
