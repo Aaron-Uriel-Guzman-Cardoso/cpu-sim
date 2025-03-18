@@ -1,4 +1,6 @@
-sources = files('cpu.c', 'insts.c', 'msg.c', 'ncurses_utilities.c')
+sources = files(
+  'cpu.c', 'insts.c', 'msg.c', 'ncurses_utilities.c', 'lista.c'
+)
 cpu_sim_lib = library('cpu_sim_lib', sources,
   install : true,
   include_directories : includes,

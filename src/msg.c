@@ -52,3 +52,13 @@ msg_log(enum log_level level, const char *str)
     wrefresh(msg);
     return 0;
 }
+
+int32_t
+list_log(enum log_level level, const char *str)
+{
+    clear_window_part(list, 1, 1, 8, 78);
+    mvwprintw(list, 1, 2, "%s", str);
+    wrefresh(list);
+
+    return 0;
+}
