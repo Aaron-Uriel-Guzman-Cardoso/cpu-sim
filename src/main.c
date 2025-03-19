@@ -45,6 +45,8 @@ enum prompt_status {
     PROMPT_STATUS_INSTRUCTION_DECODED
 };
 
+Lista *listos, *ejecucion, *terminados;
+
 WINDOW *reg;
 WINDOW *process;
 struct cpu *cpu; /* Tendremos una única CPU en el simulador */
@@ -54,6 +56,8 @@ struct timespec last_process_update = { 0 };
 struct timespec process_update_period = { 0, 500000000 }; // Actualizar cada 500 ms
 
 const int32_t MAX_QUANTUM = 5;
+
+void process_update();
 
 struct cmd *
 instruction_decode(const char *buf)
@@ -212,7 +216,7 @@ prompt(void)
  */
 
 int32_t 
-eval(struct cmd *cmd, Lista *listos) { 
+eval(struct cmd *cmd) { 
     if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
         msg_log(LOG_LEVEL_INFO, "Saliendo del programa...\n");
         endwin();
@@ -233,6 +237,7 @@ eval(struct cmd *cmd, Lista *listos) {
             if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
                 listaInsertarFinal(listos, nuevo_proceso);
                 msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
+                process_update();
             } else {
                 msg_log(LOG_LEVEL_ERROR, "Error al crear el proceso.\n");
                 if (nuevo_proceso != NULL) {
@@ -247,22 +252,6 @@ eval(struct cmd *cmd, Lista *listos) {
     }
 
     return 0;
-}
-/**
- * \brief Inicializa las listas de procesos listos, en ejecución y terminados.
- *
- * Esta función se encarga de inicializar tres listas diferentes que representan los estados de los procesos.                         
- *
- * \param listos Puntero a la lista de procesos listos que se inicializará.
- * \param ejecucion Puntero a la lista de procesos en ejecución que se inicializará.
- * \param terminados Puntero a la lista de procesos terminados que se inicializará.
- *
- * \return No devuelve ningún valor (void).
- */
-void inicializarListas(Lista *listos, Lista *ejecucion, Lista *terminados) {
-    crearLista(listos);
-    crearLista(ejecucion);
-    crearLista(terminados);
 }
 
 /**
@@ -282,6 +271,7 @@ void cargarProceso(Lista *listos, const char *fileName) {
     PCB *proceso = listaCreaNodo((struct cpu_context) {0}, fileName);
     if (proceso != NULL && proceso->programa != NULL) {
         listaInsertarFinal(listos, proceso);
+        process_update();
 
         char mensaje[300];
         snprintf(mensaje, sizeof(mensaje), "Proceso cargado: %s\n", fileName);
@@ -301,72 +291,69 @@ void cargarProceso(Lista *listos, const char *fileName) {
 
 /**
  * \brief Ejecuta los procesos en la lista de listos y los mueve a la lista de ejecución.
- * \param listos Lista de procesos listos para ejecutar.
- * \param ejecucion Lista de procesos en ejecución.
- * \param terminados Lista de procesos terminados.
  */
-void ejecutarProcesos(Lista *listos, Lista *ejecucion, Lista *terminados, int32_t *quantum) {
-    // Si no hay proceso en ejecución y hay procesos en Listos, mover el primero a Ejecución
+void ejecutarProcesos(int32_t *quantum) {
+    // Si no hay proceso en ejecución y hay procesos en listos, mover el primero a Ejecución
     if (ejecucion->inicio == NULL && listos->inicio != NULL) {
         PCB *proceso = listaExtraeInicio(listos);
         listaInsertarFinal(ejecucion, proceso);
         *quantum = 0; // Reiniciar el quantum
         cpu_reset(cpu);
-        if (cpu_load_insts_from_file(cpu, proceso -> fileName) == 1) {
+        if (cpu_load_insts_from_file(cpu, proceso->fileName) != 0) {
             cpu_reset(cpu);
             char logstr[200];
             snprintf(logstr, sizeof(logstr), "Error al cargar el archivo %s del proceso %d\n", proceso->fileName, proceso->PID);
             msg_log(LOG_LEVEL_ERROR, logstr);
         }
-
     }
-
-    //Si hay proceso en ejecucion, ejecuta instruccion
-    if (ejecucion -> inicio != NULL){
-        PCB *proceso = ejecucion -> inicio;
-
+    // Si hay proceso en ejecución, ejecutar instrucciones
+    if (ejecucion->inicio != NULL) {
+        PCB *proceso = ejecucion->inicio;
         if (cpu_sync(cpu)) {
-            /**
-             * ¿Qué pasa cuando CPU ejecutó más procesos de los que debería?
-             * Este es un caso posible con el diseño actual, y ocurre cuando
-             * la frecuencia sea muy alta
-             * TODO: Asegurarse que CPU no se pase del MAX_QUANTUM en altas
-             *       frecuencias.
-             */
             enum cpu_event event;
             while ((event = cpu_poll_event(cpu)) != CPU_NONE) {
                 (*quantum)++;
-                if (*quantum >= MAX_QUANTUM) {
-                    struct PCB *executed_process = listaExtraeInicio(ejecucion);
-                    executed_process->context = cpu_dump_context(cpu);
-                    listaInsertarFinal(listos, executed_process);
-                    cpu_reset(cpu);
+                if (event == CPU_HALT) {
+                    // Proceso finalizado, moverlo a terminados
+                    PCB *finished = listaExtraeInicio(ejecucion);
+                    finished->context = cpu_dump_context(cpu);
+                    listaInsertarFinal(terminados, finished);
                     *quantum = 0;
+                    cpu_reset(cpu);
                     break;
                 }
-                /**
-                 * Confiemos que logstr no se vaya a desbordar :)
-                 */
-                char logstr[200];
+                if (*quantum >= MAX_QUANTUM) {
+                    // Quantum expirado: guardar contexto y hacer cambio de proceso (Round-robin)
+                    PCB *running = listaExtraeInicio(ejecucion);
+                    running->context = cpu_dump_context(cpu);
+                    listaInsertarFinal(listos, running);
+                    *quantum = 0;
+                    cpu_reset(cpu);
+                    // Cargar el siguiente proceso en ejecución si existe
+                    if (listos->inicio != NULL) {
+                        PCB *next = listaExtraeInicio(listos);
+                        listaInsertarFinal(ejecucion, next);
+                        if (cpu_load_insts_from_file(cpu, next->fileName) != 0) {
+                            char logstr[200];
+                            snprintf(logstr, sizeof(logstr), "Error al cargar el archivo %s del proceso %d\n", next->fileName, next->PID);
+                            msg_log(LOG_LEVEL_ERROR, logstr);
+                        }
+                    }
+                    break;
+                }
+                // Impresión de otros eventos
                 if (event == CPU_INSTRUCTION_EXECUTED) {
                     msg_log(LOG_LEVEL_INFO, "Instrucción ejecutada correctamente.\n");
                 } else if (event == CPU_INSTRUCTION_INVALID) {
                     msg_log(LOG_LEVEL_ERROR, "Instrucción inválida.\n");
-                } else if (event == CPU_HALT) {
-                    snprintf(logstr, sizeof(logstr), "Proceso %d terminado.\n", proceso->PID);
-                    msg_log(LOG_LEVEL_INFO, logstr);
-                    struct PCB *terminated_process = listaExtraeInicio(ejecucion);
-                    listaInsertarFinal(terminados, terminated_process);
-                    *quantum = 0;
                 } else if (event == CPU_DIVISION_BY_ZERO) {
                     char irstr[50];
                     inst_to_str((struct inst *)&proceso->context.regs[REG_IR], irstr, sizeof(irstr));
-                    snprintf(logstr, sizeof(logstr), "División por cero detectada: PID == %d, IR == %s\n, PC == %d", proceso->PID, irstr, proceso->context.regs[REG_PC]);
+                    char logstr[200];
+                    snprintf(logstr, sizeof(logstr), "División por cero detectada: PID == %d, IR == %s, PC == %ld", 
+                             proceso->PID, irstr, proceso->context.regs[REG_PC]);
                     msg_log(LOG_LEVEL_WARN, logstr);
                 } else if (event == CPU_REGISTER_OVERFLOW) {
-                    char irstr[50];
-                    inst_to_str((struct inst *)&proceso->context.regs[REG_IR], irstr, sizeof(irstr));
-                    snprintf(logstr, sizeof(logstr), "Desbordamiento de registro detectado: PID == %d, IR == %s\n, PC == %d", proceso->PID, irstr, proceso->context.regs[REG_PC]);
                     msg_log(LOG_LEVEL_WARN, "Desbordamiento de registro.\n");
                 } else {
                     msg_log(LOG_LEVEL_INFO, "Evento no reconocido.\n");
@@ -377,11 +364,21 @@ void ejecutarProcesos(Lista *listos, Lista *ejecucion, Lista *terminados, int32_
 }
 
 /**
- * \brief Inicializa la ventana de procesos
+ * \brief Inicializa la ventana de procesos así como la listas de procesos.
  */
 int32_t
 process_init(void)
 {
+    listos = malloc(sizeof(*listos));
+    ejecucion = malloc(sizeof(*ejecucion));
+    terminados = malloc(sizeof(*terminados));
+    if (listos == NULL || ejecucion == NULL || terminados == NULL) {
+        msg_log(LOG_LEVEL_ERROR, "Error al inicializar las listas de procesos.\n");
+        return -1;
+    }
+    crearLista(listos);
+    crearLista(ejecucion);
+    crearLista(terminados);
     process = newwin(10, 80, 0, 85);
     box(process, 0, 0);
     wrefresh(process);
@@ -393,7 +390,7 @@ process_init(void)
  * \brief Actualiza la ventana de procesos
  */
 void
-process_update(Lista *ejecucion, Lista *listos, Lista *terminados)
+process_update()
 {
     clear_window_part(process, 1, 2, 11, 76);
 
@@ -467,9 +464,6 @@ main(void) {
     box(prompt.win, 0, 0);
     mvwprintw(prompt.win, 0, 35, "|Prompt|");
     regwin_update();
-    // Inicializar las listas de procesos
-    Lista listos, ejecucion, terminados;
-    inicializarListas(&listos, &ejecucion, &terminados);
 
     // Inicializar el quantum
     int quantum = 0;
@@ -477,19 +471,21 @@ main(void) {
     while (true) {
         enum prompt_status status = prompt_update(&prompt);
         if (status == PROMPT_STATUS_INSTRUCTION_DECODED) {
-            eval(prompt.decoded_inst, &listos);
+            eval(prompt.decoded_inst);
             free(prompt.decoded_inst);
             prompt.decoded_inst = NULL;
         }
 
         // Ejecutar procesos
-        ejecutarProcesos(&listos, &ejecucion, &terminados, &quantum);
+        ejecutarProcesos(&quantum);
 
-        // Mostrar el estado en la ventana de list
-        process_update(&ejecucion, &listos, &terminados);
+        /**
+         * TODO: evitar que la ventana de procesos se actualice tan seguido
+         */
+        process_update();
+        regwin_update();
 
         wrefresh(prompt.win);
-        wrefresh(reg);
         wrefresh(process);
         /*
          * La lógica del bucle principal se ejecuta cada 33 ms
@@ -503,9 +499,9 @@ main(void) {
     }
 
     // Liberar la memoria
-    liberarLista(&listos);
-    liberarLista(&ejecucion);
-    liberarLista(&terminados);
+    liberarLista(listos);
+    liberarLista(ejecucion);
+    liberarLista(terminados);
 
     endwin();
     return 0;
