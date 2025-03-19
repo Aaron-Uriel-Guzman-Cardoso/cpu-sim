@@ -5,21 +5,10 @@
 #include <stdio.h>
 #include <insts.h>
 #include <time.h>
+#include <stdbool.h>
+#include <queue.h>
+#include <cpu_event.h>
 
-/*
- * Posibles sucesos que pueden ocurrir durante la ejecución de la CPU.
- * Estos indican eventos de utilidad para el sistema operativo que serán
- * manejados por este mismo.
- */
-enum cpu_event {
-    CPU_INSTRUCTION_EXECUTED,
-    CPU_INSTRUCTION_ILEGAL,     /* TODO: implementar funcionamiento */
-    CPU_INSTRUCTION_INVALID,    /* TODO: implementar funcionamiento */
-    CPU_REGISTER_OVERFLOW,      /* TODO: implementar funcionamiento */
-    CPU_DIVISION_BY_ZERO,       /* TODO: implementar funcionamiento */
-    CPU_HALT,
-    CPU_NONE
-};
 enum consts {
     INSTS_MAX = 128,
 };

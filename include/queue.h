@@ -1,11 +1,16 @@
 #ifndef QUEUE_H
 #define QUEUE_H
-#include <cpu.h>
+
+#include <cpu_event.h>
+#include <stdbool.h>
+#include <stdint.h>
+
 /**
  * /brief Cola utilizada para almacenar los eventos de la CPU.
  * 
  * TODO: Hacer que la cola sea de tamaño dinámico, por el momento es estática.
  */
+
 struct queue {
     /**
      * TODO: hacer que la cola sea genérica para poder almacenar cualquier tipo
@@ -20,4 +25,4 @@ void queue_enqueue(struct queue *self, enum cpu_event event);
 enum cpu_event queue_dequeue(struct queue *self);
 void queue_free(struct queue *self);
 
-#endif
+#endif // QUEUE_H
