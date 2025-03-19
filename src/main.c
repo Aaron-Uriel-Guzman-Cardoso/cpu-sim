@@ -356,7 +356,7 @@ void ejecutarProcesos(int32_t *quantum) {
             cpu_reset(cpu);
             char logstr[200];
             snprintf(logstr, sizeof(logstr), "Error al cargar el archivo %s del proceso %d\n", proceso->fileName, proceso->PID);
-            msg_log(LOG_LEVEL_ERROR, logstr);
+            //msg_log(LOG_LEVEL_ERROR, logstr);
         }
     }
     // Si hay proceso en ejecución, ejecutar instrucciones
@@ -369,10 +369,15 @@ void ejecutarProcesos(int32_t *quantum) {
                 if (event == CPU_HALT) {
                     // Proceso finalizado, moverlo a terminados
                     PCB *finished = listaExtraeInicio(ejecucion);
+                    if (finished == NULL) {
+                        msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
+                    }
                     finished->context = cpu_dump_context(cpu);
                     listaInsertarFinal(terminados, finished);
+
                     *quantum = 0;
                     cpu_reset(cpu);
+                    process_update();
                     break;
                 }
                 if (*quantum >= MAX_QUANTUM) {
@@ -437,7 +442,7 @@ process_init(void)
     crearLista(listos);
     crearLista(ejecucion);
     crearLista(terminados);
-    process = newwin(10, 80, 0, 85);
+    process = newwin(24, 80, 0, 85);
     box(process, 0, 0);
     wrefresh(process);
  
@@ -458,18 +463,35 @@ process_init(void)
  *
  * \return No devuelve ningún valor (void).
  */
-void
-process_update()
+void process_update()
 {
     clear_window_part(process, 1, 2, 11, 76);
 
-    // Mostrar el proceso en ejecución
+    // Mostrar el encabezado del procesador
     mvwprintw(process, 1, 2, "......PROCESADOR......");
+
     if (ejecucion->inicio != NULL) {
         PCB *proceso = ejecucion->inicio;
-        char str[80];
-        pcb_as_str(proceso, str, sizeof(str));
-        mvwprintw(process, 2, 2, str);
+
+        // Obtener el contexto actual de la CPU
+        struct cpu_context context = cpu_dump_context(cpu);
+
+        // Convertir la instrucción actual (IR) a una cadena legible
+        char current_inst[50];
+        inst_to_str((struct inst *)&context.regs[REG_IR], current_inst, sizeof(current_inst));
+
+        // Mostrar todos los valores en una sola línea
+        mvwprintw(process, 2, 2, 
+                  "PID: %d, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
+                  proceso->PID, 
+                  proceso->fileName, 
+                  context.regs[REG_AX], 
+                  context.regs[REG_BX],
+                  context.regs[REG_CX], 
+                  context.regs[REG_DX], 
+                  context.regs[REG_PC], 
+                  current_inst);
+        wrefresh(process);
     } else {
         clear_window_part(process, 2, 2, 4, 76); 
     }
