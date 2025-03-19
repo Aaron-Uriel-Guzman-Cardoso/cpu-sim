@@ -18,17 +18,13 @@ void crearLista(Lista *l) {
     l -> contador = 0;
 }
 
-PCB* listaCreaNodo(int ax, int bx, int cx, int dx, int pc, const char *ir, const char *file_name) {
+PCB *
+listaCreaNodo(struct cpu_context context, const char *file_name)
+{
     PCB *nuevo_nodo = (PCB*)malloc(sizeof(PCB));
     if (nuevo_nodo) {
-        nuevo_nodo->AX = 0;
-        nuevo_nodo->BX = 0;
-        nuevo_nodo->CX = 0;
-        nuevo_nodo->DX = 0;
-        nuevo_nodo->PC = 0;
+        nuevo_nodo->context = context;
         nuevo_nodo->PID = globalPID++;
-        
-        nuevo_nodo->IR[0] = '\0';
         strcpy(nuevo_nodo->fileName, file_name);
         nuevo_nodo->programa = fopen(file_name, "r");
         nuevo_nodo->sig = NULL;
@@ -118,4 +114,20 @@ void liberarLista(Lista *l){
         nodo = listaExtraeInicio(l);
         liberaNodo(nodo);
     }
+}
+
+/**
+ * \brief Convierte estructura PCB a una cadena legible por seres humanos
+ */
+void 
+pcb_as_str(struct PCB *self, char *str, size_t size)
+{
+    if (!self || !str || size == 0) {
+        return;
+    }
+    char irstr[50];
+    inst_to_str((struct inst *)&self->context.regs[REG_IR], irstr, sizeof(irstr));
+    snprintf(str, size, "PID: %d, File: %s, AX: %d, BX: %d, CX: %d, DX: %d, PC: %d, IR: %s",
+             self->PID, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
+             self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
 }

@@ -2,20 +2,20 @@
 #define LISTA_H
 
 #include <stdio.h>
+#include <cpu.h>
+
 
 typedef struct PCB {
+    struct cpu_context context;
     int PID;
-    int AX;
-    int BX;
-    int CX;
-    int DX;
-    int PC;
-    char IR[100];
     char fileName[256];
     FILE *programa;
     struct PCB *sig;
 } PCB;
 
+/**
+ * TODO: Implementar una lista genérica que no requiera de PCB como nodo.
+ */
 typedef struct Cabecera {
     PCB *inicio;
     PCB *fin;
@@ -23,12 +23,13 @@ typedef struct Cabecera {
 } Lista;
 
 void crearLista(Lista *);
-PCB* listaCreaNodo(int ax, int bx, int cx, int dx, int pc, const char *ir, const char *file_name);
+PCB *listaCreaNodo(struct cpu_context context, const char *file_name);
 void listaInsertarFinal(Lista *, PCB *);
 PCB* listaBuscarPID(Lista *, int);
 PCB* listaExtraeInicio(Lista *);
 PCB* listaExtraePID(Lista *, int);
 void liberarNodo(PCB *);
 void liberarLista(Lista *);
+void pcb_as_str(struct PCB *self, char *str, size_t size);
 
 #endif // LISTA_H
