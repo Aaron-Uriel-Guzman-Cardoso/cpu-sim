@@ -387,6 +387,7 @@ cpu_prepare(struct cpu *self)
  * 
  * Toma el archiivo especificado y lo carga para su procesamiento en la CPU,
  * cargar las instrucciones será un paso necesario para poder ejecutar la CPU.
+ * 
  * \return Si hubo error al cargar las instrucciones desde el archivo:
  *          - 0 no hubo error
  *          - 1 hubo error al leer una instrucción del archivo
