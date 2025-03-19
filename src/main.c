@@ -338,9 +338,6 @@ void cargarProceso(Lista *listos, const char *fileName) {
  * proceso de la lista de listos a la lista de ejecución. Luego, ejecuta las instrucciones
  * del proceso en ejecución y maneja los eventos generados por la CPU.
  *
- * \param listos Puntero a la lista de procesos listos para ejecutarse.
- * \param ejecucion Puntero a la lista de procesos en ejecución.
- * \param terminados Puntero a la lista de procesos terminados.
  * \param quantum Puntero al contador de quantum actual.
  *
  * \return No devuelve ningún valor (void).
@@ -351,54 +348,78 @@ void ejecutarProcesos(int32_t *quantum) {
         PCB *proceso = listaExtraeInicio(listos);
         listaInsertarFinal(ejecucion, proceso);
         *quantum = 0; // Reiniciar el quantum
-        cpu_reset(cpu);
-        if (cpu_load_insts_from_file(cpu, proceso->fileName) != 0) {
+        
+        // Verificar si el proceso ya tiene contexto previo (fue interrumpido por quantum)
+        if (proceso->context.regs[REG_PC] > 1) {
+            // El proceso ya se ejecutó antes - restaurar su contexto
             cpu_reset(cpu);
-            char logstr[200];
-            snprintf(logstr, sizeof(logstr), "Error al cargar el archivo %s del proceso %d\n", proceso->fileName, proceso->PID);
-            //msg_log(LOG_LEVEL_ERROR, logstr);
+            if (cpu_load_from_context(cpu, proceso->context, proceso->instmem) != 0) {
+                char logstr[350];
+                snprintf(logstr, sizeof(logstr), "Error al cargar el contexto del proceso %d\n", proceso->PID);
+                msg_log(LOG_LEVEL_ERROR, logstr);
+            } else {
+                msg_log(LOG_LEVEL_INFO, "Proceso restaurado desde contexto guardado.");
+            }
+        } else {
+            // Primera ejecución del proceso - cargar desde archivo
+            cpu_reset(cpu);
+            if (cpu_load_insts_from_file(cpu, proceso->fileName) != 0) {
+                cpu_reset(cpu);
+                char logstr[350];
+                snprintf(logstr, sizeof(logstr), "Error al cargar el archivo %s del proceso %d\n", 
+                         proceso->fileName, proceso->PID);
+                msg_log(LOG_LEVEL_ERROR, logstr);
+            } else {
+                // Guardar instrucciones en el PCB para futuras restauraciones
+                /*
+                 * TODO: no interactuar directamente con instmem, para evitar modificaciones accidentales
+                 */
+                memcpy(proceso->instmem, cpu->instmem, sizeof(proceso->instmem));
+            }
         }
     }
+    
     // Si hay proceso en ejecución, ejecutar instrucciones
     if (ejecucion->inicio != NULL) {
         PCB *proceso = ejecucion->inicio;
         if (cpu_sync(cpu)) {
+            // Incrementar el quantum una vez por ciclo de CPU, no por cada evento
+            (*quantum)++;
+            
+            // Verificar si se superó el quantum antes de procesar eventos
+            if (*quantum >= MAX_QUANTUM) {
+                // Quantum expirado: guardar contexto y hacer cambio de proceso (Round-robin)
+                PCB *running = listaExtraeInicio(ejecucion);
+                if (running == NULL) {
+                    msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
+                    return;
+                }
+                running->context = cpu_dump_context(cpu);
+                listaInsertarFinal(listos, running);
+                *quantum = 0;
+                cpu_reset(cpu);
+                process_update();
+                return; // Salir para no procesar más eventos en este ciclo
+            }
+            
+            // Procesar eventos generados por la CPU
             enum cpu_event event;
             while ((event = cpu_poll_event(cpu)) != CPU_NONE) {
-                (*quantum)++;
                 if (event == CPU_HALT) {
                     // Proceso finalizado, moverlo a terminados
                     PCB *finished = listaExtraeInicio(ejecucion);
                     if (finished == NULL) {
                         msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
+                        return;
                     }
                     finished->context = cpu_dump_context(cpu);
                     listaInsertarFinal(terminados, finished);
-
                     *quantum = 0;
                     cpu_reset(cpu);
                     process_update();
-                    break;
+                    return; // Salir después de manejar el evento de terminación
                 }
-                if (*quantum >= MAX_QUANTUM) {
-                    // Quantum expirado: guardar contexto y hacer cambio de proceso (Round-robin)
-                    PCB *running = listaExtraeInicio(ejecucion);
-                    running->context = cpu_dump_context(cpu);
-                    listaInsertarFinal(listos, running);
-                    *quantum = 0;
-                    cpu_reset(cpu);
-                    // Cargar el siguiente proceso en ejecución si existe
-                    if (listos->inicio != NULL) {
-                        PCB *next = listaExtraeInicio(listos);
-                        listaInsertarFinal(ejecucion, next);
-                        if (cpu_load_insts_from_file(cpu, next->fileName) != 0) {
-                            char logstr[200];
-                            snprintf(logstr, sizeof(logstr), "Error al cargar el archivo %s del proceso %d\n", next->fileName, next->PID);
-                            msg_log(LOG_LEVEL_ERROR, logstr);
-                        }
-                    }
-                    break;
-                }
+                
                 // Impresión de otros eventos
                 if (event == CPU_INSTRUCTION_EXECUTED) {
                     msg_log(LOG_LEVEL_INFO, "Instrucción ejecutada correctamente.\n");
@@ -442,7 +463,7 @@ process_init(void)
     crearLista(listos);
     crearLista(ejecucion);
     crearLista(terminados);
-    process = newwin(24, 80, 0, 85);
+    process = newwin(42, 80, 0, 81);
     box(process, 0, 0);
     wrefresh(process);
  

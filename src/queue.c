@@ -45,11 +45,14 @@ enum cpu_event
 queue_dequeue(struct queue *self)
 {
     if (!self) {
-        /**
-         * TODO: cambiar a NULL cuando la cola sea genérica.
-         */
         return CPU_NONE;
     }
+    
+    // Verificar si la cola está vacía
+    if (self->head == self->tail) {
+        return CPU_NONE;
+    }
+    
     enum cpu_event event = self->events[self->head];
     self->events[self->head] = CPU_NONE;
     self->head = (self->head + 1) % 128;

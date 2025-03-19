@@ -13,25 +13,6 @@
 #include <time.h>
 #include <queue.h>
 
-struct cpu {
-    struct timespec last_cycle;  /**< Última vez que CPU hizo un ciclo de reloj */
-    struct timespec target_freq; /**< Frecuencia objetivo en segundos */
-    bool halt;                   /**< Si se ejecutó la instrucción END */
-    bool div_by_zero;            /**< Ocurrió una división por cero en el ciclo
-                                      actual */
-    bool overflow;               /**< Ocurrió un desbordamiento de registro en 
-                                      el ciclo actual */
-    int64_t regs[REG_LIMIT];
-    struct queue *events;        /**< Cola con todos los eventos que no se han consultado
-                                      de la CPU */
-    /*
-     * La memoria para las instrucciones será un arreglo de 128, esperando que
-     * ningún programa se acerque a esto.
-     * TODO: implementar arreglo dinámico para instrucciones
-     */
-    struct inst instmem[INSTS_MAX];
-};
-
 
 /**
  * \brief Unión que representa los dos formatos que pueden tener las
@@ -568,6 +549,10 @@ cpu_sync(struct cpu *self)
     uint32_t missed_cycles =
         (delta.tv_sec + ((double)delta.tv_nsec / 1E9)) /
         (self->target_freq.tv_sec + ((double)self->target_freq.tv_nsec / 1E9));
+    /**
+     * Temporal solo para ver si la CPU está funcionando
+     */
+    missed_cycles = (missed_cycles)? 1: 0;
     if (missed_cycles) {
         self->last_cycle = current;
         /**
@@ -625,4 +610,46 @@ cpu_dump_context(struct cpu *self)
     struct cpu_context context;
     memcpy(context.regs, self->regs, sizeof(self->regs));
     return context;
+}
+
+/**
+ * \brief Carga el estado de la CPU desde un contexto guardado y memoria de instrucciones.
+ *
+ * Esta función restaura completamente el estado de una CPU a partir de un contexto
+ * previamente guardado y una memoria de instrucciones. Es utilizada principalmente
+ * para la implementación del algoritmo round-robin, permitiendo retomar la ejecución
+ * de un proceso desde el punto donde fue interrumpido.
+ *
+ * \param self La CPU a manipular
+ * \param context El contexto previamente guardado con los valores de registros
+ * \param instmem El arreglo de instrucciones a cargar en la memoria de instrucciones
+ * \return 0 si fue exitoso, < 0 en caso de error
+ */
+int32_t
+cpu_load_from_context(struct cpu *self, struct cpu_context context, struct inst instmem[INSTS_MAX])
+{
+    if (!self) {
+        return -1;
+    }
+    
+    // Restaurar registros
+    memcpy(self->regs, context.regs, sizeof(self->regs));
+    
+    // Restaurar memoria de instrucciones
+    memcpy(self->instmem, instmem, sizeof(self->instmem));
+    
+    // Habilitar la CPU para ejecución
+    self->halt = false;
+    self->div_by_zero = false;
+    self->overflow = false;
+    
+    // Actualizar el tiempo del último ciclo para sincronización
+    clock_gettime(CLOCK_MONOTONIC, &self->last_cycle);
+    
+    // Limpiar eventos pendientes
+    while (cpu_poll_event(self) != CPU_NONE) {
+        // Vaciar la cola de eventos
+    }
+    
+    return 0;
 }

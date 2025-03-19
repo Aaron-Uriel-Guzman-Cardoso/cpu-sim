@@ -7,9 +7,10 @@
 
 typedef struct PCB {
     struct cpu_context context;
-    int PID;
+    uint32_t PID;
     char fileName[256];
     FILE *programa;
+    struct inst instmem[128];
     struct PCB *sig;
 } PCB;
 
