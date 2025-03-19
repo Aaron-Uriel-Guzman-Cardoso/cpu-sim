@@ -13,10 +13,13 @@ enum reg reg_from_str(const char *str);
 enum op op_from_str(const char *str, bool is_immediate);
 
 /**
- * \brief Convierte str a un formato de instrucción procesable por la CPU.
- * 
- * En caso de no haber una conversión válida se regresará NULL.
+ * \brief Convierte una cadena de texto en una estructura de instrucción.
+ * \param buf Cadena de texto que contiene la instrucción a convertir.
+ * \return Retorna un puntero a la estructura `inst` creada o NULL si la conversión falla.
+ * \details Analiza la cadena de entrada, extrae el nombre de la operación y los argumentos,
+ *         y los convierte en una estructura de instrucción válida.
  */
+
 struct inst *
 inst_from_str(const char *buf)
 {
@@ -84,10 +87,12 @@ err:
 }
 
 
-/*
- * Analiza str y devuelve el valor de uso interno del registro al que se
- * refiere.
- * Por ejemplo, la cadena "AX" corresponderá con REG_AX.
+/**
+ * \brief Convierte una cadena de texto en un identificador de registro.
+ * \param str Cadena de texto que representa el nombre del registro.
+ * \return Retorna el identificador del registro correspondiente o REG_LIMIT si no hay coincidencia.
+ * \details Compara la cadena de entrada con los nombres de los registros conocidos (AX, BX, CX, DX, PC, IR)
+ *         y devuelve el identificador correspondiente.
  */
 enum reg
 reg_from_str(const char *str)
@@ -119,6 +124,14 @@ reg_from_str(const char *str)
     }
 }
 
+/**
+ * \brief Convierte un identificador de registro en una cadena de texto.
+ * \param reg Identificador del registro que se desea convertir.
+ * \param str Puntero al buffer donde se almacenará la cadena resultante.
+ * \param size Tamaño del buffer.
+ * \return No devuelve ningún valor (void).
+ * \details Convierte el identificador de registro en su representación en cadena de texto (AX, BX, CX, etc.).
+ */
 void
 reg_to_str(enum reg reg, char *str, size_t size)
 {
@@ -150,13 +163,13 @@ reg_to_str(enum reg reg, char *str, size_t size)
     }
 }
 
-/*
- * Identifica la operación que efectuará la instrucción leída, esta función
- * regresará entonces la operación en un formato que se puede manipular más
- * fácilmente para el procesado de la CPU.
- * El booleano `is_immediate` determinará si se usará la variante inmediata de
- * la operación, en caso de no haber variante inmediata se regresará la misma
- * función.
+/**
+ * \brief Convierte una cadena de texto en un identificador de operación.
+ * \param str Cadena de texto que representa el nombre de la operación.
+ * \param is_immediate Indica si la operación es inmediata (usa un valor directo).
+ * \return Retorna el identificador de la operación correspondiente o OP_LIMIT si no hay coincidencia.
+ * \details Compara la cadena de entrada con los nombres de las operaciones conocidas (MOV, ADD, SUB, etc.)
+ *         y devuelve el identificador correspondiente, considerando si es una operación inmediata o no.
  */
 enum op
 op_from_str(const char *str, bool is_immediate)
@@ -194,6 +207,14 @@ op_from_str(const char *str, bool is_immediate)
     }
 }
 
+/**
+ * \brief Convierte un identificador de operación en una cadena de texto.
+ * \param op Identificador de la operación que se desea convertir.
+ * \param str Puntero al buffer donde se almacenará la cadena resultante.
+ * \param size_t Tamaño del buffer.
+ * \return No devuelve ningún valor (void).
+ * \details Convierte el identificador de operación en su representación en cadena de texto (MOV, ADD, SUB, etc.).
+ */
 void
 op_to_str(enum op op, char *str, size_t size_t)
 {
@@ -231,8 +252,11 @@ op_to_str(enum op op, char *str, size_t size_t)
     }
 }
 
-/*
- * Determina si la operación recibida es de tipo inmediato
+/**
+ * \brief Determina si una operación es inmediata.
+ * \param op Identificador de la operación que se desea verificar.
+ * \return Retorna `true` si la operación es inmediata, `false` en caso contrario.
+ * \details Verifica si la operación dada es de tipo inmediato (usa un valor directo).
  */
 bool
 is_immediate(enum op op)
@@ -240,9 +264,13 @@ is_immediate(enum op op)
     return (op >= OP_INC && op < OP_LIMIT);
 }
 
-/*
- * Convierte una instrucción en un formato legible para el ser humano.
- * En este caso LIMIT significa que un valor no pudo ser traducido.
+/**
+ * \brief Convierte una estructura de instrucción en una cadena de texto.
+ * \param self Puntero a la estructura de instrucción que se desea convertir.
+ * \param str Puntero al buffer donde se almacenará la cadena resultante.
+ * \param size Tamaño del buffer.
+ * \return No devuelve ningún valor (void).
+ * \details Convierte la instrucción en una cadena de texto legible, incluyendo la operación y sus argumentos.
  */
 void
 inst_to_str(const struct inst *self, char *str, size_t size) {

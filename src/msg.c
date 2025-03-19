@@ -6,10 +6,10 @@
 WINDOW *msg;
 WINDOW *list;
 
-/*
- * Inicializa la ventana de mensajes para que esta pueda pueda ser utilizada.
- * Esta función tendrá que ser llamada después de que ncurses esté
- * inicializada.
+/**
+ * \brief Inicializa la ventana de mensajes.
+ * \return Retorna 0 si la ventana se inicializó correctamente.
+ * \details Crea y configura una ventana para mostrar mensajes, con dimensiones y posición fijas.
  */
 int32_t
 msg_init(void)
@@ -24,8 +24,12 @@ msg_init(void)
     return 0;
 }
 
-/*
- * Agrega el mensaje `msg` a la ventana correspondiente.
+/**
+ * \brief Registra un mensaje en la ventana de logs.
+ * \param level Nivel de importancia del mensaje (info, advertencia, error).
+ * \param str Cadena de texto que contiene el mensaje a registrar.
+ * \return Retorna 0 si el mensaje se registró correctamente.
+ * \details Limpia la ventana de logs y muestra el mensaje, con planes futuros para soportar historial y colores.
  */
 int32_t
 msg_log(enum log_level level, const char *str)

@@ -59,6 +59,18 @@ const int32_t MAX_QUANTUM = 5;
 
 void process_update();
 
+/**
+ * \brief Decodifica una cadena de texto en una estructura de comando.
+ *
+ * Esta función toma una cadena de texto (`buf`) que representa una instrucción,
+ * la divide en componentes (nombre del comando y argumentos), y la almacena en
+ * una estructura
+ *
+ * \param buf Cadena de texto que contiene la instrucción a decodificar.
+ *
+ * \return Retorna un puntero a la estructura `cmd` que contiene la instrucción decodificada.
+ *         Retorna `NULL` si no se pudo asignar memoria para la estructura.
+ */
 struct cmd *
 instruction_decode(const char *buf)
 {
@@ -86,7 +98,14 @@ instruction_decode(const char *buf)
     return inst;
 }
 
-
+/**
+ * \brief Actualiza la ventana de registros de la CPU.
+ *
+ * Esta función se encarga de actualizar la ventana que muestra los registros de la CPU
+ * y su estado actual.
+ *
+ * \return Retorna 0 si la actualización se realizó correctamente.
+ */
 int32_t
 regwin_update(void)
 {
@@ -105,6 +124,21 @@ regwin_update(void)
     return 0;
 }
 
+/**
+ * \brief Actualiza el estado del prompt y maneja la entrada del usuario.
+ *
+ * Esta función gestiona la interacción del usuario con el prompt, capturando las teclas
+ * presionadas y realizando acciones correspondientes, como decodificar instrucciones,
+ * manejar el historial de comandos, ajustar la frecuencia de la CPU y actualizar la
+ * interfaz gráfica.
+ *
+ * \param prompt Puntero a la estructura `prompt` que contiene el estado actual del prompt.
+ *
+ * \return Retorna un valor de tipo `enum prompt_status` que indica el estado actual del prompt:
+ *         - `PROMPT_STATUS_OK`: El prompt está en un estado normal.
+ *         - `PROMPT_STATUS_INSTRUCTION_DECODED`: Se ha decodificado una instrucción válida.
+ *         - `PROMPT_STATUS_INVALID`: La instrucción ingresada no es válida.
+ */
 enum prompt_status
 prompt_update(struct prompt *prompt)
 {
@@ -176,8 +210,15 @@ prompt_update(struct prompt *prompt)
     return status;
 }
 
-/*
- * Imprime un prompt y obtiene un comando ingresado por el usuario.
+/**
+ * \brief Simula un prompt para leer un comando.
+ *
+ * Esta función simula la lectura de un comando desde un prompt. Asigna memoria para
+ * una estructura de tipo `cmd`, lee un comando predefinido ("LOAD PROG") y lo almacena
+ * en la estructura.
+ *
+ * \return Retorna un puntero a la estructura `cmd` que contiene el comando leído.
+ *         Retorna `NULL` si no se pudo asignar memoria para la estructura.
  */
 struct cmd *
 prompt(void)
@@ -290,7 +331,19 @@ void cargarProceso(Lista *listos, const char *fileName) {
 }
 
 /**
- * \brief Ejecuta los procesos en la lista de listos y los mueve a la lista de ejecución.
+ * \brief Ejecuta los procesos en la lista de ejecución y maneja los eventos de la CPU.
+ *
+ * Esta función se encarga de gestionar la ejecución de los procesos en la lista de ejecución.
+ * Si no hay un proceso en ejecución y hay procesos en la lista de listos, mueve el primer
+ * proceso de la lista de listos a la lista de ejecución. Luego, ejecuta las instrucciones
+ * del proceso en ejecución y maneja los eventos generados por la CPU.
+ *
+ * \param listos Puntero a la lista de procesos listos para ejecutarse.
+ * \param ejecucion Puntero a la lista de procesos en ejecución.
+ * \param terminados Puntero a la lista de procesos terminados.
+ * \param quantum Puntero al contador de quantum actual.
+ *
+ * \return No devuelve ningún valor (void).
  */
 void ejecutarProcesos(int32_t *quantum) {
     // Si no hay proceso en ejecución y hay procesos en listos, mover el primero a Ejecución
@@ -364,7 +417,12 @@ void ejecutarProcesos(int32_t *quantum) {
 }
 
 /**
- * \brief Inicializa la ventana de procesos así como la listas de procesos.
+ * \brief Inicializa la ventana de visualización de procesos.
+ *
+ * Esta función se encarga de crear y configurar una ventana en la interfaz gráfica
+ * donde se mostrará la información de los procesos (en ejecución, listos y terminados).
+ *
+ * \return Retorna 0 si la ventana se inicializó correctamente.
  */
 int32_t
 process_init(void)
@@ -387,7 +445,18 @@ process_init(void)
 }
 
 /**
- * \brief Actualiza la ventana de procesos
+ * \brief Actualiza y muestra la información de los procesos en la interfaz gráfica.
+ *
+ * Esta función se encarga de actualizar la ventana de la interfaz gráfica que muestra
+ * el estado de los procesos en ejecución, listos y terminados. Limpia las secciones
+ * correspondientes de la ventana y luego imprime la información actualizada de cada
+ * lista de procesos.
+ *
+ * \param ejecucion Puntero a la lista de procesos en ejecución.
+ * \param listos Puntero a la lista de procesos listos para ejecutarse.
+ * \param terminados Puntero a la lista de procesos terminados.
+ *
+ * \return No devuelve ningún valor (void).
  */
 void
 process_update()

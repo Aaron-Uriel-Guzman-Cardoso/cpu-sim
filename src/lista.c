@@ -13,11 +13,22 @@
 
 static int globalPID = 1;
 
+/**
+ * \brief Inicializa una lista vacía.
+ * \param l Puntero a la lista que se desea inicializar.
+ * \return No devuelve ningún valor (void).
+ */
 void crearLista(Lista *l) {
     l -> inicio = l -> fin = NULL;
     l -> contador = 0;
 }
 
+/**
+ * \brief Crea un nuevo nodo de tipo PCB.
+ * \param context Contexto de la CPU para el nuevo nodo.
+ * \param file_name Nombre del archivo asociado al proceso.
+ * \return Retorna un puntero al nuevo nodo creado o NULL si falla la asignación de memoria.
+ */
 PCB *
 listaCreaNodo(struct cpu_context context, const char *file_name)
 {
@@ -32,6 +43,12 @@ listaCreaNodo(struct cpu_context context, const char *file_name)
     return nuevo_nodo;
 }
 
+/**
+ * \brief Inserta un nodo al final de la lista.
+ * \param l Puntero a la lista donde se insertará el nodo.
+ * \param nuevo_nodo Puntero al nodo que se desea insertar.
+ * \return No devuelve ningún valor (void).
+ */
 void listaInsertarFinal(Lista* l, PCB* nuevo_nodo) {
     PCB *ultimo;
     if (l -> inicio == NULL) {
@@ -48,6 +65,12 @@ void listaInsertarFinal(Lista* l, PCB* nuevo_nodo) {
     }
 }
 
+/**
+ * \brief Busca un nodo en la lista por su PID.
+ * \param l Puntero a la lista donde se realizará la búsqueda.
+ * \param PID PID del proceso que se desea buscar.
+ * \return Retorna un puntero al nodo encontrado o NULL si no se encuentra.
+ */
 PCB* listaBuscarPID(Lista *l, int PID) {
     PCB *nodo;
     nodo = l -> inicio;
@@ -57,6 +80,11 @@ PCB* listaBuscarPID(Lista *l, int PID) {
     return nodo;
 }
 
+/**
+ * \brief Extrae el primer nodo de la lista.
+ * \param l Puntero a la lista de donde se extraerá el nodo.
+ * \return Retorna un puntero al nodo extraído o NULL si la lista está vacía.
+ */
 PCB* listaExtraeInicio(Lista *l) {
     PCB *nodo;
     if(l -> inicio != NULL){
@@ -73,6 +101,12 @@ PCB* listaExtraeInicio(Lista *l) {
 		return NULL;
 }
 
+/**
+ * \brief Extrae un nodo de la lista por su PID.
+ * \param l Puntero a la lista de donde se extraerá el nodo.
+ * \param PID PID del proceso que se desea extraer.
+ * \return Retorna un puntero al nodo extraído o NULL si no se encuentra.
+ */
 PCB* listaExtraePID(Lista *l, int PID) {
     PCB *nodo, *anterior;
     if(l -> inicio != NULL){
@@ -103,11 +137,21 @@ PCB* listaExtraePID(Lista *l, int PID) {
         return NULL;
 }
 
+/**
+ * \brief Libera la memoria de un nodo.
+ * \param nodo Puntero al nodo que se desea liberar.
+ * \return No devuelve ningún valor (void).
+ */
 void liberaNodo(PCB *nodo){
     fclose(nodo -> programa);
     free(nodo);
 }
 
+/**
+ * \brief Libera toda la memoria de una lista.
+ * \param l Puntero a la lista que se desea liberar.
+ * \return No devuelve ningún valor (void).
+ */
 void liberarLista(Lista *l){
     PCB *nodo;
     while(l -> inicio != NULL){
@@ -117,7 +161,11 @@ void liberarLista(Lista *l){
 }
 
 /**
- * \brief Convierte estructura PCB a una cadena legible por seres humanos
+ * \brief Convierte la información de un PCB a una cadena de texto.
+ * \param self Puntero al PCB que se desea convertir.
+ * \param str Puntero al buffer donde se almacenará la cadena resultante.
+ * \param size Tamaño del buffer.
+ * \return No devuelve ningún valor (void).
  */
 void 
 pcb_as_str(struct PCB *self, char *str, size_t size)
