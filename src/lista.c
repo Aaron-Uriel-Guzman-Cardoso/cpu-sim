@@ -29,16 +29,22 @@ void crearLista(Lista *l) {
  * \param file_name Nombre del archivo asociado al proceso.
  * \return Retorna un puntero al nuevo nodo creado o NULL si falla la asignación de memoria.
  */
-PCB *
-listaCreaNodo(struct cpu_context context, const char *file_name)
-{
+PCB 
+*listaCreaNodo(struct cpu_context context, const char *file_name) {
     PCB *nuevo_nodo = (PCB*)malloc(sizeof(PCB));
     if (nuevo_nodo) {
         nuevo_nodo->context = context;
-        nuevo_nodo->PID = globalPID++;
-        strcpy(nuevo_nodo->fileName, file_name);
         nuevo_nodo->programa = fopen(file_name, "r");
-        nuevo_nodo->sig = NULL;
+        if (nuevo_nodo->programa != NULL) {
+            // Solo incrementar el PID si el archivo se abre correctamente
+            nuevo_nodo->PID = globalPID++;
+            strcpy(nuevo_nodo->fileName, file_name);
+            nuevo_nodo->sig = NULL;
+        } else {
+            // Si el archivo no se puede abrir, liberar el nodo y retornar NULL
+            free(nuevo_nodo);
+            nuevo_nodo = NULL;
+        }
     }
     return nuevo_nodo;
 }

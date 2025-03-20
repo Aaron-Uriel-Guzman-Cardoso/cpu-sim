@@ -273,6 +273,14 @@ eval(struct cmd *cmd) {
             snprintf(mensaje, sizeof(mensaje), "Cargando archivo: %s\n", cmd->arg1);
             msg_log(LOG_LEVEL_INFO, mensaje);
 
+            // Verificar si el archivo existe antes de crear el proceso
+            FILE *archivo = fopen(cmd->arg1, "r");
+            if (archivo == NULL) {
+                msg_log(LOG_LEVEL_ERROR, "Error: El archivo no existe o no se puede abrir.\n");
+                return 1; 
+            }
+            fclose(archivo);
+
             // Crear un nuevo proceso y lo agrega a la lista
             PCB *nuevo_proceso = listaCreaNodo((struct cpu_context) { 0 }, cmd->arg1);
             if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
@@ -484,12 +492,11 @@ process_init(void)
  *
  * \return No devuelve ningún valor (void).
  */
-void process_update()
-{
-    clear_window_part(process, 1, 2, 11, 76);
+void process_update() {
+    werase(process);
+    box(process, 0, 0);
 
-    // Mostrar el encabezado del procesador
-    mvwprintw(process, 1, 2, "......PROCESADOR......");
+    mvwprintw(process, 1, 2, "---------------------------------|PROCESADOR|--------------------------------");
 
     if (ejecucion->inicio != NULL) {
         PCB *proceso = ejecucion->inicio;
@@ -512,39 +519,43 @@ void process_update()
                   context.regs[REG_DX], 
                   context.regs[REG_PC], 
                   current_inst);
-        wrefresh(process);
     } else {
-        clear_window_part(process, 2, 2, 4, 76); 
+        // Limpiar la línea si no hay proceso en ejecución
+        clear_window_part(process, 2, 2, 1, 76); 
     }
 
-    // Mostrar la lista de procesos listos
-    mvwprintw(process, 7, 2, "......LISTA......");
+    // Mostrar la lista de procesos listos (sin límite de procesos)
+    mvwprintw(process, 4, 2, "-----------------------------------|LISTA|-----------------------------------");
     PCB *actual = listos->inicio;
-    int fila = 8;
-    while (actual != NULL && fila < 10) {
+    int fila = 5; 
+    while (actual != NULL) { // Sin límite de procesos
         char str[80];
         pcb_as_str(actual, str, sizeof(str)); 
         mvwprintw(process, fila, 2, str);
         actual = actual->sig;
         fila++;
     }
-    if (fila < 10) {
-        clear_window_part(process, fila, 2, 10 - fila, 76); 
-    }
+
+    // Calcular la posición de "TERMINADOS" dinámicamente
+    int fila_terminados = fila;
+
+    clear_window_part(process, fila_terminados, 2, 18 - fila_terminados, 76);
 
     // Mostrar la lista de procesos terminados
-    mvwprintw(process, 9, 2, "......TERMINADOS......");
+    mvwprintw(process, fila_terminados, 2, "---------------------------------|TERMINADOS|--------------------------------");
     actual = terminados->inicio;
-    fila = 10;
-    while (actual != NULL && fila < 18) { 
+    fila = fila_terminados + 1; 
+    while (actual != NULL) { // Sin límite de procesos
         char str[80];
         pcb_as_str(actual, str, sizeof(str)); 
         mvwprintw(process, fila, 2, str);
         actual = actual->sig;
         fila++;
     }
+
+    // Limpiar las líneas sobrantes si hay menos procesos
     if (fila < 18) {
-        clear_window_part(process, fila, 2, 12 - fila, 76); 
+        clear_window_part(process, fila, 2, 18 - fila, 76); 
     }
 
     wrefresh(process); 
