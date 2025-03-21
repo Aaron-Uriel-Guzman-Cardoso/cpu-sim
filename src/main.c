@@ -259,6 +259,9 @@ prompt(void)
 int32_t 
 eval(struct cmd *cmd) { 
     if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
+        liberarLista(listos);
+        liberarLista(ejecucion);
+        liberarLista(terminados);
         msg_log(LOG_LEVEL_INFO, "Saliendo del programa...\n");
         endwin();
         printf("\n");
@@ -293,6 +296,44 @@ eval(struct cmd *cmd) {
                     free(nuevo_proceso); 
                 }
             }
+        }
+    }else if (strncmp(cmd->name, "KILL", 4) == 0) {
+        if (cmd->arg1[0] == '\0') {
+            msg_log(LOG_LEVEL_ERROR, "Falta el PID del proceso a eliminar.\n");
+            return 1;
+        } else {
+            int pid = atoi(cmd->arg1);
+            PCB *proceso = listaBuscarPID(listos, pid);
+
+            if ((proceso = listaExtraePID(listos, pid)) != NULL) {
+                liberaNodo(proceso);
+                char mensaje[300];
+                snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
+                msg_log(LOG_LEVEL_INFO, mensaje);
+                process_update();
+            } else if ((proceso = listaExtraePID(ejecucion, pid)) != NULL) {
+                liberaNodo(proceso);
+                char mensaje[300];
+                snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
+                msg_log(LOG_LEVEL_INFO, mensaje);
+                process_update();
+            } else if ((proceso = listaExtraePID(terminados, pid)) != NULL) {
+                liberaNodo(proceso);
+                char mensaje[300];
+                snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
+                msg_log(LOG_LEVEL_INFO, mensaje);
+                process_update();
+            }
+            else {
+                char mensaje[300];
+                snprintf(mensaje, sizeof(mensaje), "Error: No se pudo eliminar el proceso con PID %d.\n", pid);
+                msg_log(LOG_LEVEL_ERROR, mensaje);
+                return 1;
+            }
+            char mensaje[300];
+            snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
+            msg_log(LOG_LEVEL_INFO, mensaje);
+            process_update();
         }
     }
     else { 
