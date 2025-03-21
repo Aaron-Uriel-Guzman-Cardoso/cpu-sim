@@ -602,6 +602,15 @@ void process_update() {
     wrefresh(process); 
 }
 
+/**
+ * \brief Función principal del programa.
+ *
+ * Esta función inicializa la interfaz gráfica, la CPU y las listas de procesos.
+ * Luego, entra en un bucle principal donde se actualiza la interfaz gráfica y se
+ * ejecutan los procesos en la CPU.
+ *
+ * \return Retorna 0 si el programa se ejecutó correctamente.
+ */
 int 
 main(void) {
     cpu = cpu_new();
