@@ -306,25 +306,20 @@ eval(struct cmd *cmd) {
             PCB *proceso = listaBuscarPID(listos, pid);
 
             if ((proceso = listaExtraePID(listos, pid)) != NULL) {
-                liberarNodo(proceso);
+                proceso->context = cpu_dump_context(cpu);
+                listaInsertarFinal(terminados, proceso);
                 char mensaje[300];
                 snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
                 msg_log(LOG_LEVEL_INFO, mensaje);
                 process_update();
             } else if ((proceso = listaExtraePID(ejecucion, pid)) != NULL) {
-                liberarNodo(proceso);
+                proceso->context = cpu_dump_context(cpu);
+                listaInsertarFinal(terminados, proceso);
                 char mensaje[300];
                 snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
                 msg_log(LOG_LEVEL_INFO, mensaje);
                 process_update();
-            } else if ((proceso = listaExtraePID(terminados, pid)) != NULL) {
-                liberarNodo(proceso);
-                char mensaje[300];
-                snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
-                msg_log(LOG_LEVEL_INFO, mensaje);
-                process_update();
-            }
-            else {
+            } else {
                 char mensaje[300];
                 snprintf(mensaje, sizeof(mensaje), "Error: No se pudo eliminar el proceso con PID %d.\n", pid);
                 msg_log(LOG_LEVEL_ERROR, mensaje);
