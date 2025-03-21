@@ -1,8 +1,9 @@
 #ifndef CPU_EVENT_H
 #define CPU_EVENT_H
 
-/*
- * Posibles sucesos que pueden ocurrir durante la ejecución de la CPU.
+/**
+ * \brief Posibles sucesos que pueden ocurrir durante la ejecución de la CPU
+ * 
  * Estos indican eventos de utilidad para el sistema operativo que serán
  * manejados por este mismo.
  */
