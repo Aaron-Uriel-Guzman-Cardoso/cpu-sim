@@ -306,19 +306,19 @@ eval(struct cmd *cmd) {
             PCB *proceso = listaBuscarPID(listos, pid);
 
             if ((proceso = listaExtraePID(listos, pid)) != NULL) {
-                liberaNodo(proceso);
+                liberarNodo(proceso);
                 char mensaje[300];
                 snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
                 msg_log(LOG_LEVEL_INFO, mensaje);
                 process_update();
             } else if ((proceso = listaExtraePID(ejecucion, pid)) != NULL) {
-                liberaNodo(proceso);
+                liberarNodo(proceso);
                 char mensaje[300];
                 snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
                 msg_log(LOG_LEVEL_INFO, mensaje);
                 process_update();
             } else if ((proceso = listaExtraePID(terminados, pid)) != NULL) {
-                liberaNodo(proceso);
+                liberarNodo(proceso);
                 char mensaje[300];
                 snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
                 msg_log(LOG_LEVEL_INFO, mensaje);
@@ -570,9 +570,9 @@ void process_update() {
     PCB *actual = listos->inicio;
     int fila = 5; 
     while (actual != NULL) { // Sin límite de procesos
-        char str[80];
+        char str[200];
         pcb_as_str(actual, str, sizeof(str)); 
-        mvwprintw(process, fila, 2, str);
+        mvwprintw(process, fila, 2, "%s", str);
         actual = actual->sig;
         fila++;
     }
@@ -587,9 +587,9 @@ void process_update() {
     actual = terminados->inicio;
     fila = fila_terminados + 1; 
     while (actual != NULL) { // Sin límite de procesos
-        char str[80];
+        char str[200];
         pcb_as_str(actual, str, sizeof(str)); 
-        mvwprintw(process, fila, 2, str);
+        mvwprintw(process, fila, 2, "%s", str);
         actual = actual->sig;
         fila++;
     }
@@ -670,9 +670,3 @@ main(void) {
     endwin();
     return 0;
 }
-
-//DETALLES
-//SE ESCRIBE MAL MIENTRAS SE EJECUTA LA PARTE DE LISTAS
-//NO AUMENTA EL VALOR DEL PID
-//NO SE REFRESCA CUANDO SE LLENA LA LISTA DE TERMINADOS, NO MUESTRA LOS MAS NUEVOS
-//SE EJECUTAN DEMASIADO RAPIDO LOS PROCESOS

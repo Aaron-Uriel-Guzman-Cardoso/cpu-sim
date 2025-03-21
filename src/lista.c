@@ -148,7 +148,7 @@ PCB* listaExtraePID(Lista *l, int PID) {
  * \param nodo Puntero al nodo que se desea liberar.
  * \return No devuelve ningún valor (void).
  */
-void liberaNodo(PCB *nodo){
+void liberarNodo(PCB *nodo){
     fclose(nodo -> programa);
     free(nodo);
 }
@@ -162,7 +162,7 @@ void liberarLista(Lista *l){
     PCB *nodo;
     while(l -> inicio != NULL){
         nodo = listaExtraeInicio(l);
-        liberaNodo(nodo);
+        liberarNodo(nodo);
     }
 }
 
@@ -181,7 +181,7 @@ pcb_as_str(struct PCB *self, char *str, size_t size)
     }
     char irstr[50];
     inst_to_str((struct inst *)&self->context.regs[REG_IR], irstr, sizeof(irstr));
-    snprintf(str, size, "PID: %d, File: %s, AX: %d, BX: %d, CX: %d, DX: %d, PC: %d, IR: %s",
+    snprintf(str, size, "PID: %d, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
              self->PID, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
              self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
 }
