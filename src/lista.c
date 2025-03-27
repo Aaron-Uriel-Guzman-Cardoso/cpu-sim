@@ -186,7 +186,7 @@ pcb_as_str(struct PCB *self, char *str, size_t size)
              self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
 }
 
-void insertarName(fileList *names, char *fileName){
+/*void insertarName(fileList *names, char *fileName){
     fileTitle *newName = malloc(sizeof(fileTitle));
     newName->fileName = fileName;
     newName->next = NULL;
@@ -198,7 +198,7 @@ void insertarName(fileList *names, char *fileName){
         names->fin->next = newName;
         names->fin = newName;
     }
-}
+}*/
 
 
 
