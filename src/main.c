@@ -49,6 +49,7 @@ Lista *listos, *ejecucion, *terminados;
 
 WINDOW *reg;
 WINDOW *process;
+WINDOW *counter;
 struct cpu *cpu; /* Tendremos una única CPU en el simulador */
 struct timespec cpu_period = { 0, 500000000 }; /* Frecuencia de ejecucón de la cpu */ 
 
@@ -486,6 +487,80 @@ void ejecutarProcesos(int32_t *quantum) {
     }
 }
 
+void counterWin(){
+
+    clear_window_part(counter, 2, 2, 1, 76); // Clear Ejecución line
+    clear_window_part(counter, 3, 2, 1, 76); // Clear Listos line
+    clear_window_part(counter, 4, 2, 1, 76); // Clear Terminados line
+
+    /*fileTitle *name;
+    name = names->inicio;*/
+
+    int count = 0;
+    PCB* nodo;
+    nodo = ejecucion->inicio;
+    if (nodo == NULL){
+        mvwprintw(counter, 2, 2, "Ejecución: ");
+    }
+    else{
+        mvwprintw(counter, 2, 2, "Ejecución: %s", nodo->fileName);
+        /*if (name == NULL){
+            name->fileName = nodo->fileName;
+            names->inicio = name;
+            names->fin = name;
+            count++;
+        }
+        else{
+            name->next = malloc(sizeof(fileTitle));
+            name = name->next;
+            name->fileName = nodo->fileName;
+            names->fin = name;
+        }*/
+    }
+
+    PCB* nodo2;
+    nodo2 = listos->inicio;
+    if (nodo2 == NULL){
+        mvwprintw(counter, 3, 2, "Listos: ");
+    }
+    else{
+        mvwprintw(counter, 3, 2, "Listos: ");
+        int i = 10;
+        while (nodo2 != NULL){
+            if(nodo2->sig == NULL){
+                mvwprintw(counter, 3, i, "%s", nodo2->fileName);
+            }
+            else{
+                mvwprintw(counter, 3, i, "%s ->", nodo2->fileName);
+            }
+            i += strlen(nodo2->fileName) + 4;
+            nodo2 = nodo2->sig;
+        }
+    }
+
+    PCB* nodo3;
+    nodo3 = terminados->inicio;
+    if (nodo3 == NULL){
+        mvwprintw(counter, 4, 2, "Terminados: ");
+    }
+    else{
+        mvwprintw(counter, 4, 2, "Terminados: ");
+        int i = 14;
+        while (nodo3 != NULL){
+            if(nodo3->sig == NULL){
+                mvwprintw(counter, 4, i, "%s", nodo3->fileName);
+            }
+            else{
+                mvwprintw(counter, 4, i, "%s ->", nodo3->fileName);
+            }
+            i += strlen(nodo3->fileName) + 4;
+            nodo3 = nodo3->sig;
+        }
+    }
+
+    wrefresh(counter);
+}
+
 /**
  * \brief Inicializa la ventana de visualización de procesos.
  *
@@ -597,6 +672,7 @@ void process_update() {
     wrefresh(process); 
 }
 
+
 /**
  * \brief Función principal del programa.
  *
@@ -623,13 +699,15 @@ main(void) {
     wrefresh(reg);
     prompt.win = newwin(7, 80, 17, 0);
     box(prompt.win, 0, 0);
+    counter = newwin(7, 80, 24, 0);
+    box(counter, 0, 0);
+    wrefresh(counter);
+    wrefresh(prompt.win);
     nodelay(prompt.win, TRUE); 
     keypad(prompt.win, TRUE);
     prompt.hist.current = 0;
     prompt.hist.size = 0;
     prompt.hist_index = 0;
-
-    box(prompt.win, 0, 0);
     mvwprintw(prompt.win, 0, 35, "|Prompt|");
     regwin_update();
 
@@ -646,6 +724,7 @@ main(void) {
 
         // Ejecutar procesos
         ejecutarProcesos(&quantum);
+        counterWin();
 
         /**
          * TODO: evitar que la ventana de procesos se actualice tan seguido
@@ -653,6 +732,7 @@ main(void) {
         process_update();
         regwin_update();
 
+        wrefresh(counter);
         wrefresh(prompt.win);
         wrefresh(process);
         /*

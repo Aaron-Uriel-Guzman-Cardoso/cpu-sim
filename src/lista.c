@@ -185,3 +185,22 @@ pcb_as_str(struct PCB *self, char *str, size_t size)
              self->PID, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
              self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
 }
+
+void insertarName(fileList *names, char *fileName){
+    fileTitle *newName = malloc(sizeof(fileTitle));
+    newName->fileName = fileName;
+    newName->next = NULL;
+    if (names->inicio == NULL){
+        names->inicio = newName;
+        names->fin = newName;
+    }
+    else{
+        names->fin->next = newName;
+        names->fin = newName;
+    }
+}
+
+
+
+
+

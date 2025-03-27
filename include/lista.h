@@ -4,6 +4,15 @@
 #include <stdio.h>
 #include <cpu.h>
 
+typedef struct fileTitle {
+    char *fileName;
+    struct fileList *next;
+}fileTitle;
+
+typedef struct fileList {
+    struct fileTitle *inicio;
+    struct fileTitle *fin;
+}fileList;
 
 typedef struct PCB {
     struct cpu_context context;
