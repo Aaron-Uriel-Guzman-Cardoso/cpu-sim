@@ -607,20 +607,54 @@ void process_update() {
     werase(process);
     box(process, 0, 0);
 
-    mvwprintw(process, 1, 2, "---------------------------------|PROCESADOR|--------------------------------");
-
+    // Contar archivos únicos en ejecución y listos (no terminados)
+    int unique_files = 0;
+    char unique_names[10][50] = {0}; // Asumimos máximo 10 nombres diferentes
+    
+    // 1. Procesos en ejecución
     if (ejecucion->inicio != NULL) {
         PCB *proceso = ejecucion->inicio;
+        bool exists = false;
+        for (int i = 0; i < unique_files; i++) {
+            if (strcmp(unique_names[i], proceso->fileName) == 0) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists && unique_files < 10) {
+            strncpy(unique_names[unique_files], proceso->fileName, 49);
+            unique_files++;
+        }
+    }
 
-        // Obtener el contexto actual de la CPU
+    // 2. Procesos listos (esperando)
+    PCB *actual = listos->inicio;
+    while (actual != NULL && unique_files < 10) {
+        bool exists = false;
+        for (int i = 0; i < unique_files; i++) {
+            if (strcmp(unique_names[i], actual->fileName) == 0) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) {
+            strncpy(unique_names[unique_files], actual->fileName, 49);
+            unique_files++;
+        }
+        actual = actual->sig;
+    }
+
+    // Mostrar el conteo de archivos únicos activos (ejecución + listos)
+    mvwprintw(process, 1, 2, "Archivos únicos activos: %d", unique_files);
+    mvwprintw(process, 2, 2, "---------------------------------|PROCESADOR|--------------------------------");
+
+    // Resto de la función permanece igual...
+    if (ejecucion->inicio != NULL) {
+        PCB *proceso = ejecucion->inicio;
         struct cpu_context context = cpu_dump_context(cpu);
-
-        // Convertir la instrucción actual (IR) a una cadena legible
         char current_inst[50];
         inst_to_str((struct inst *)&context.regs[REG_IR], current_inst, sizeof(current_inst));
-
-        // Mostrar todos los valores en una sola línea
-        mvwprintw(process, 2, 2, 
+        mvwprintw(process, 3, 2, 
                   "PID: %d, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
                   proceso->PID, 
                   proceso->fileName, 
@@ -631,15 +665,14 @@ void process_update() {
                   context.regs[REG_PC], 
                   current_inst);
     } else {
-        // Limpiar la línea si no hay proceso en ejecución
-        clear_window_part(process, 2, 2, 1, 76); 
+        clear_window_part(process, 3, 2, 1, 76); 
     }
 
-    // Mostrar la lista de procesos listos (sin límite de procesos)
+    // Resto del código original...
     mvwprintw(process, 4, 2, "-----------------------------------|LISTA|-----------------------------------");
-    PCB *actual = listos->inicio;
+    actual = listos->inicio;
     int fila = 5; 
-    while (actual != NULL) { // Sin límite de procesos
+    while (actual != NULL) {
         char str[200];
         pcb_as_str(actual, str, sizeof(str)); 
         mvwprintw(process, fila, 2, "%s", str);
@@ -647,16 +680,12 @@ void process_update() {
         fila++;
     }
 
-    // Calcular la posición de "TERMINADOS" dinámicamente
     int fila_terminados = fila;
-
     clear_window_part(process, fila_terminados, 2, 18 - fila_terminados, 76);
-
-    // Mostrar la lista de procesos terminados
     mvwprintw(process, fila_terminados, 2, "---------------------------------|TERMINADOS|--------------------------------");
     actual = terminados->inicio;
     fila = fila_terminados + 1; 
-    while (actual != NULL) { // Sin límite de procesos
+    while (actual != NULL) {
         char str[200];
         pcb_as_str(actual, str, sizeof(str)); 
         mvwprintw(process, fila, 2, "%s", str);
@@ -664,7 +693,6 @@ void process_update() {
         fila++;
     }
 
-    // Limpiar las líneas sobrantes si hay menos procesos
     if (fila < 18) {
         clear_window_part(process, fila, 2, 18 - fila, 76); 
     }
