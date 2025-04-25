@@ -30,7 +30,7 @@ void crearLista(Lista *l) {
  * \return Retorna un puntero al nuevo nodo creado o NULL si falla la asignación de memoria.
  */
 PCB 
-*listaCreaNodo(struct cpu_context context, const char *file_name) {
+*listaCreaNodo(struct cpu_context context, const char *file_name, int uid) {
     PCB *nuevo_nodo = (PCB*)malloc(sizeof(PCB));
     if (nuevo_nodo) {
         nuevo_nodo->context = context;

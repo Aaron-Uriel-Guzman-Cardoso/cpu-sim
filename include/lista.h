@@ -21,6 +21,10 @@ typedef struct PCB {
     FILE *programa;
     struct inst instmem[128];
     struct PCB *sig;
+    int UID;
+    int P;
+    float KCPU;
+    float KCPUxU;
 } PCB;
 
 /**
@@ -33,7 +37,7 @@ typedef struct Cabecera {
 } Lista;
 
 void crearLista(Lista *);
-PCB *listaCreaNodo(struct cpu_context context, const char *file_name);
+PCB *listaCreaNodo(struct cpu_context context, const char *file_name, int uid);
 void listaInsertarFinal(Lista *, PCB *);
 PCB* listaBuscarPID(Lista *, int);
 PCB* listaExtraeInicio(Lista *);

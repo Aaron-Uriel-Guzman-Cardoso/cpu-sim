@@ -17,6 +17,7 @@
 
 #define MAX_CMD_CHARS 50
 #define HISTORY_SIZE 3
+#define PBASE 60
 
 struct cmd {
     char name[MAX_CMD_CHARS];
@@ -57,6 +58,36 @@ struct timespec last_process_update = { 0 };
 struct timespec process_update_period = { 0, 500000000 }; // Actualizar cada 500 ms
 
 const int32_t MAX_QUANTUM = 5;
+
+const int32_t PBase = PBASE;
+int users[20] = {0};
+int numUs = 0;
+float W = 0.0;
+float IncCPU = 60/MAX_QUANTUM;
+
+
+/**
+ * \brief Verifica si un usuario ya existe en la lista de usuarios.
+ *
+ * Esta función recorre la lista de usuarios y verifica si el ID de usuario
+ * proporcionado ya está presente. Si el ID de usuario ya existe, retorna true,
+ * de lo contrario, retorna false.
+ *
+ * \param uid ID del usuario a verificar.
+ *
+ * \return Retorna true si el usuario ya existe, false en caso contrario.
+ */
+bool searchUser(int uid) {
+    if(numUs == 0) {
+        return false;
+    }
+    for (int i = 0; i < numUs; i++) {
+        if (users[i] == uid) {
+            return true;
+        }
+    }
+    return false;
+}
 
 void process_update();
 
@@ -272,7 +303,17 @@ eval(struct cmd *cmd) {
         if (cmd->arg1[0] == '\0') {
             msg_log(LOG_LEVEL_ERROR, "Falta el nombre del archivo\n");
             return 1;
-        } else {
+        } else{
+            int uid = 0;
+            if (cmd->arg2[0] != '\0')
+            {
+                uid = atoi(cmd->arg2);
+                if (searchUser(uid) == false)
+                {
+                    users[numUs] = uid;
+                    numUs++;
+                }    
+            }
             char mensaje[300];
             snprintf(mensaje, sizeof(mensaje), "Cargando archivo: %s\n", cmd->arg1);
             msg_log(LOG_LEVEL_INFO, mensaje);
@@ -286,7 +327,14 @@ eval(struct cmd *cmd) {
             fclose(archivo);
 
             // Crear un nuevo proceso y lo agrega a la lista
-            PCB *nuevo_proceso = listaCreaNodo((struct cpu_context) { 0 }, cmd->arg1);
+            PCB *nuevo_proceso = listaCreaNodo((struct cpu_context) { 0 }, cmd->arg1, uid);
+            if (numUs > 0)
+            {
+                W = 1/numUs;
+            }
+            nuevo_proceso->P = PBase;
+            nuevo_proceso->KCPU = 0;
+            nuevo_proceso->KCPUxU = 0;
             if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
                 listaInsertarFinal(listos, nuevo_proceso);
                 msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
@@ -343,7 +391,7 @@ eval(struct cmd *cmd) {
 /**
  * \brief Carga un proceso en la lista de procesos listos.
  *
- * Esta función crea un nuevo nodo de tipo PCB (Processutilizando la función `listaCreaNodo`
+ * Esta función crea un nuevo nodo de tipo PCB (Process) utilizando la función `listaCreaNodo`
  * y lo inserta en la lista de procesos listos. Si el proceso se carga correctamente, se registra un mensaje
  * de log indicando que el proceso fue cargado. En caso de error, se registra un mensaje de log indicando
  * el fallo y se libera la memoria asignada al nodo si fue creado.
@@ -354,7 +402,8 @@ eval(struct cmd *cmd) {
  * \return No devuelve ningún valor (void).
  */
 void cargarProceso(Lista *listos, const char *fileName) {
-    PCB *proceso = listaCreaNodo((struct cpu_context) {0}, fileName);
+    int uid = 0;
+    PCB *proceso = listaCreaNodo((struct cpu_context) {0}, fileName, uid);
     if (proceso != NULL && proceso->programa != NULL) {
         listaInsertarFinal(listos, proceso);
         process_update();
