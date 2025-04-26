@@ -108,6 +108,49 @@ PCB* listaExtraeInicio(Lista *l) {
 }
 
 /**
+ * \brief Busca un nodo en la lista con base en su prioridad (P).
+ * \param l Puntero a la lista donde se realizará la búsqueda.
+ * \return Retorna un puntero al nodo encontrado o NULL si no se encuentra.
+ */
+PCB* listaExtraePrioridad(Lista *l) {
+    if (l->inicio == NULL) {
+        return NULL;
+    }
+
+    PCB *actual = l->inicio;
+    PCB *anterior = NULL;
+    PCB *min_nodo = actual;
+    PCB *min_anterior = NULL;
+
+    // Buscar el nodo con menor P
+    while (actual != NULL) {
+        if (actual->P < min_nodo->P) {
+            min_nodo = actual;
+            min_anterior = anterior;
+        }
+        anterior = actual;
+        actual = actual->sig;
+    }
+
+    // Extraer el nodo con menor P
+    if (min_anterior == NULL) {
+        // El nodo con menor P es el primero
+        l->inicio = min_nodo->sig;
+    } else {
+        min_anterior->sig = min_nodo->sig;
+    }
+
+    if (min_nodo == l->fin) {
+        l->fin = min_anterior;
+    }
+
+    min_nodo->sig = NULL;
+    l->contador--;
+
+    return min_nodo;
+}
+
+/**
  * \brief Extrae un nodo de la lista por su PID.
  * \param l Puntero a la lista de donde se extraerá el nodo.
  * \param PID PID del proceso que se desea extraer.

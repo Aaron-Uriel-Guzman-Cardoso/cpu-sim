@@ -41,6 +41,7 @@ PCB *listaCreaNodo(struct cpu_context context, const char *file_name, int uid);
 void listaInsertarFinal(Lista *, PCB *);
 PCB* listaBuscarPID(Lista *, int);
 PCB* listaExtraeInicio(Lista *);
+PCB* listaExtraePrioridad(Lista *);
 PCB* listaExtraePID(Lista *, int);
 void liberarNodo(PCB *);
 void liberarLista(Lista *);

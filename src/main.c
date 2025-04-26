@@ -437,9 +437,9 @@ void cargarProceso(Lista *listos, const char *fileName) {
  * \return No devuelve ningún valor (void).
  */
 void ejecutarProcesos(int32_t *quantum) {
-    // Si no hay proceso en ejecución y hay procesos en listos, mover el primero a Ejecución
+    // Si no hay proceso en ejecución y hay procesos en listos, mover el proceso con menor prioridad a Ejecución
     if (ejecucion->inicio == NULL && listos->inicio != NULL) {
-        PCB *proceso = listaExtraeInicio(listos);
+        PCB *proceso = listaExtraePrioridad(listos);
         listaInsertarFinal(ejecucion, proceso);
         *quantum = 0; // Reiniciar el quantum
         
