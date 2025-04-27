@@ -60,11 +60,12 @@ struct timespec process_update_period = { 0, 500000000 }; // Actualizar cada 500
 const int32_t MAX_QUANTUM = 5;
 
 const int32_t PBase = PBASE;
-int users[20] = {0};
-int numUs = 0;
-float W = 0.0;
+//User users[20] = {0};
+//int numUs = 0;
+//float W = 0.0;
 float IncCPU = 60/MAX_QUANTUM;
 
+struct user_control *uc;
 
 /**
  * \brief Verifica si un usuario ya existe en la lista de usuarios.
@@ -77,17 +78,8 @@ float IncCPU = 60/MAX_QUANTUM;
  *
  * \return Retorna true si el usuario ya existe, false en caso contrario.
  */
-bool searchUser(int uid) {
-    if(numUs == 0) {
-        return false;
-    }
-    for (int i = 0; i < numUs; i++) {
-        if (users[i] == uid) {
-            return true;
-        }
-    }
-    return false;
-}
+/*
+}*/
 
 void process_update();
 
@@ -288,6 +280,9 @@ prompt(void)
  * - Si el comando es nulo o no reconocido, muestra un mensaje de error en la ventana de mensajes.
  */
 
+struct user_control *uc;
+
+
 int32_t 
 eval(struct cmd *cmd) { 
     if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
@@ -303,48 +298,56 @@ eval(struct cmd *cmd) {
         if (cmd->arg1[0] == '\0') {
             msg_log(LOG_LEVEL_ERROR, "Falta el nombre del archivo\n");
             return 1;
-        } else{
-            int uid = 0;
+        } else {
+            uint8_t uid = 0;
             if (cmd->arg2[0] != '\0')
             {
                 uid = atoi(cmd->arg2);
-                if (searchUser(uid) == false)
+                if (uid > UINT8_MAX) {
+                    msg_log(LOG_LEVEL_ERROR, "ID de usuario inválido");
+                    return -1;
+                }
+
+                User *user_new = crearUsuario(uid);
+
+                if (!uc_user_exists(uc, uid))
                 {
-                    users[numUs] = uid;
-                    numUs++;
+                    uc_alloc_user(uc, user_new);
                 }    
-            }
-            char mensaje[300];
-            snprintf(mensaje, sizeof(mensaje), "Cargando archivo: %s\n", cmd->arg1);
-            msg_log(LOG_LEVEL_INFO, mensaje);
+                char mensaje[300];
+                snprintf(mensaje, sizeof(mensaje), "Cargando archivo: %s\n", cmd->arg1);
+                msg_log(LOG_LEVEL_INFO, mensaje);
 
-            // Verificar si el archivo existe antes de crear el proceso
-            FILE *archivo = fopen(cmd->arg1, "r");
-            if (archivo == NULL) {
-                msg_log(LOG_LEVEL_ERROR, "Error: El archivo no existe o no se puede abrir.\n");
-                return 1; 
-            }
-            fclose(archivo);
+                // Verificar si el archivo existe antes de crear el proceso
+                FILE *archivo = fopen(cmd->arg1, "r");
+                if (archivo == NULL) {
+                    msg_log(LOG_LEVEL_ERROR, "Error: El archivo no existe o no se puede abrir.\n");
+                    return 1; 
+                }
+                fclose(archivo);
 
-            // Crear un nuevo proceso y lo agrega a la lista
-            PCB *nuevo_proceso = listaCreaNodo((struct cpu_context) { 0 }, cmd->arg1, uid);
-            if (numUs > 0)
-            {
-                W = 1/numUs;
-            }
-            nuevo_proceso->P = PBase;
-            nuevo_proceso->KCPU = 0;
-            nuevo_proceso->KCPUxU = 0;
-            if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
-                listaInsertarFinal(listos, nuevo_proceso);
-                msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
-                process_update();
-            } else {
-                msg_log(LOG_LEVEL_ERROR, "Error al crear el proceso.\n");
-                if (nuevo_proceso != NULL) {
-                    free(nuevo_proceso); 
+                // Crear un nuevo proceso y lo agrega a la lista
+                PCB *nuevo_proceso = listaCreaNodo((struct cpu_context) { 0 }, cmd->arg1, uid);
+                nuevo_proceso->P = PBase;
+                nuevo_proceso->KCPU = 0;
+                //nuevo_proceso->KCPUxU = 0;
+                if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
+                    listaInsertarFinal(listos, nuevo_proceso);
+                    msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
+                    process_update();
+                } else {
+                    msg_log(LOG_LEVEL_ERROR, "Error al crear el proceso.\n");
+                    if (nuevo_proceso != NULL) {
+                        free(nuevo_proceso); 
+                    }
                 }
             }
+            else
+            {
+                msg_log(LOG_LEVEL_ERROR, "Falta el ID de usuario");
+                return -1;
+            }
+            
         }
     }else if (strncmp(cmd->name, "KILL", 4) == 0) {
         if (cmd->arg1[0] == '\0') {
@@ -489,8 +492,27 @@ void ejecutarProcesos(int32_t *quantum) {
                     return;
                 }
                 running->context = cpu_dump_context(cpu);
+                running->KCPU += (*quantum) * IncCPU;
+                User *user = uc_get_user(uc, running->UID);
+                if (user) {
+                    user->KCPUxU += (*quantum) * IncCPU;
+                }
                 listaInsertarFinal(listos, running);
+
+                User *current_user = NULL;
+
+
+                PCB *current_process = listos->inicio;
+                do {
+                    current_process->KCPU /= 2;
+                    User *user = uc_get_user(uc, current_process->UID);
+                    if (user) {
+                        user->KCPUxU /= 2;
+                        current_process->P = PBase + current_process->KCPU/2 + (user->KCPUxU/(4*uc_get_weight(uc)));
+                    }
+                } while ((current_process = current_process->sig));
                 *quantum = 0;
+
                 cpu_reset(cpu);
                 process_update();
                 return; // Salir para no procesar más eventos en este ciclo
@@ -502,6 +524,11 @@ void ejecutarProcesos(int32_t *quantum) {
                 if (event == CPU_HALT) {
                     // Proceso finalizado, moverlo a terminados
                     PCB *finished = listaExtraeInicio(ejecucion);
+                    finished->KCPU += (*quantum) * IncCPU;
+                    User *user = uc_get_user(uc, finished->UID);
+                    if (user) {
+                        user->KCPUxU += (*quantum) * IncCPU;
+                    }
                     if (finished == NULL) {
                         msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
                         return;
@@ -693,8 +720,10 @@ void process_update() {
         actual = actual->sig;
     }
 
+    uint8_t numUsers = uc->current_users; 
+
     // Mostrar el conteo de archivos únicos activos (ejecución + listos)
-    mvwprintw(process, 1, 2, "Archivos únicos activos: %d", unique_files);
+    mvwprintw(process, 1, 2, "Archivos únicos activos: %d   Usuarios activos: %d", unique_files, numUsers);
     mvwprintw(process, 2, 2, "---------------------------------|PROCESADOR|--------------------------------");
 
     // Resto de la función permanece igual...
@@ -787,6 +816,16 @@ main(void) {
     prompt.hist_index = 0;
     mvwprintw(prompt.win, 0, 35, "|Prompt|");
     regwin_update();
+
+    uc = malloc(sizeof(*uc));
+    if (!uc) {
+        msg_log(LOG_LEVEL_ERROR, "Error al inicializar user_control.\n");
+        exit(1);
+    }
+    uc->current_users = 0;
+    for (int i = 0; i < 256; i++) {
+        uc->users[i] = NULL;
+    }
 
     // Inicializar el quantum
     int quantum = 0;

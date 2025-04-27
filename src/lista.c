@@ -40,6 +40,9 @@ PCB
             nuevo_nodo->PID = globalPID++;
             strcpy(nuevo_nodo->fileName, file_name);
             nuevo_nodo->sig = NULL;
+            nuevo_nodo->UID = uid;
+            nuevo_nodo->P = 0; // Inicializar P a 0
+            nuevo_nodo->KCPU = 0.0; // Inicializar KCPU a 0.0
         } else {
             // Si el archivo no se puede abrir, liberar el nodo y retornar NULL
             free(nuevo_nodo);
@@ -85,6 +88,7 @@ PCB* listaBuscarPID(Lista *l, int PID) {
     }
     return nodo;
 }
+
 
 /**
  * \brief Extrae el primer nodo de la lista.
@@ -148,6 +152,66 @@ PCB* listaExtraePrioridad(Lista *l) {
     l->contador--;
 
     return min_nodo;
+}
+
+bool uc_user_exists(struct user_control *self, uint8_t uid) {
+    if(self->current_users == 0) {
+        return false;
+    }
+    for (int i = 0; i < 256; i++) {
+        if (self->users[i]) {
+            if (self->users[i]->uid == uid) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+User *crearUsuario(uint8_t uid) {
+    User *user = malloc(sizeof(User));
+    if (user) {
+        user->uid = uid;
+        user->KCPUxU = 0.0;
+    }
+    return user;
+}
+
+/**
+ * \brief Busca un usuario en el arreglo de usuarios por su UID.
+ * \param self Puntero al control de usuarios.
+ * \param uid UID del usuario que se desea buscar.
+ * \return Retorna un puntero al usuario encontrado o NULL si no se encuentra.
+ */
+
+User *uc_get_user(struct user_control *self, uint8_t uid) {
+    if(self->current_users == 0) {
+        return NULL;
+    }
+    for (int i = 0; i < 256; i++) {
+        if (self->users[i]) {
+            if (self->users[i]->uid == uid) {
+                return self->users[i];
+            }
+        }
+    }
+    return NULL;
+}
+
+bool
+uc_alloc_user(struct user_control *self, User *user)
+{
+    if (self->current_users == 256) {
+        return true;
+    }
+    for (uint8_t i = 0; i < 256; i += 1) {
+        if (self->users[i] == NULL) {
+            self->users[i] = user;
+            self->current_users += 1;
+            return false;
+        }
+    }
+    return true;
 }
 
 /**
@@ -243,7 +307,11 @@ pcb_as_str(struct PCB *self, char *str, size_t size)
     }
 }*/
 
-
-
-
-
+/**
+ * \brief Calcula el peso de un usuario en función de la cantidad de usuarios activos.
+ * \param self Puntero al control de usuarios.
+ * \return Retorna el peso del usuario.
+ */
+double uc_get_weight(struct user_control *self) {
+    return 1.0/self->current_users;
+}

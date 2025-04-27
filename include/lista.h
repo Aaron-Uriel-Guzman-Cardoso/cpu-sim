@@ -24,8 +24,31 @@ typedef struct PCB {
     int UID;
     int P;
     float KCPU;
-    float KCPUxU;
 } PCB;
+
+
+typedef struct User {
+    uint8_t uid;
+    float KCPUxU;
+} User;
+
+
+
+struct user_control {
+    uint8_t current_users;
+    User *users[256];
+};
+
+bool uc_user_exists(struct user_control *self, uint8_t uid);
+User *uc_get_user(struct user_control *self, uint8_t uid);
+bool uc_alloc_user(struct user_control *self, User *user);
+double uc_get_weight(struct user_control *self);
+
+/**
+ * \brief Coloca el usuario recién creado en el arreglo de usuarios
+ * \return true si no hay espacio y no se puede meter el usuario
+ */
+
 
 /**
  * TODO: Implementar una lista genérica que no requiera de PCB como nodo.
@@ -46,5 +69,9 @@ PCB* listaExtraePID(Lista *, int);
 void liberarNodo(PCB *);
 void liberarLista(Lista *);
 void pcb_as_str(struct PCB *self, char *str, size_t size);
+bool uc_alloc_user(struct user_control *self, User *user);
+User *uc_get_user(struct user_control *self, uint8_t uid);
+bool uc_user_exists(struct user_control *self, uint8_t uid);
+double uc_get_weight(struct user_control *self);
 
 #endif // LISTA_H
