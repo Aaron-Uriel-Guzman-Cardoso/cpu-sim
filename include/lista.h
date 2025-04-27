@@ -73,5 +73,6 @@ bool uc_alloc_user(struct user_control *self, User *user);
 User *uc_get_user(struct user_control *self, uint8_t uid);
 bool uc_user_exists(struct user_control *self, uint8_t uid);
 double uc_get_weight(struct user_control *self);
+User *crearUsuario(uint8_t uid);
 
 #endif // LISTA_H
