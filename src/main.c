@@ -405,7 +405,7 @@ eval(struct cmd *cmd) {
  * \return No devuelve ningún valor (void).
  */
 void cargarProceso(Lista *listos, const char *fileName) {
-    int uid = 0;
+    uint8_t uid = 0;
     PCB *proceso = listaCreaNodo((struct cpu_context) {0}, fileName, uid);
     if (proceso != NULL && proceso->programa != NULL) {
         listaInsertarFinal(listos, proceso);
@@ -658,7 +658,7 @@ process_init(void)
     crearLista(listos);
     crearLista(ejecucion);
     crearLista(terminados);
-    process = newwin(42, 80, 0, 81);
+    process = newwin(42, 125, 0, 81);
     box(process, 0, 0);
     wrefresh(process);
  
@@ -724,7 +724,7 @@ void process_update() {
 
     // Mostrar el conteo de archivos únicos activos (ejecución + listos)
     mvwprintw(process, 1, 2, "Archivos únicos activos: %d   Usuarios activos: %d", unique_files, numUsers);
-    mvwprintw(process, 2, 2, "---------------------------------|PROCESADOR|--------------------------------");
+    mvwprintw(process, 2, 2, "------------------------------------------------|PROCESADOR|-----------------------------------------------");
 
     // Resto de la función permanece igual...
     if (ejecucion->inicio != NULL) {
@@ -732,9 +732,14 @@ void process_update() {
         struct cpu_context context = cpu_dump_context(cpu);
         char current_inst[50];
         inst_to_str((struct inst *)&context.regs[REG_IR], current_inst, sizeof(current_inst));
+        User *user = uc_get_user(uc, proceso->UID);
         mvwprintw(process, 3, 2, 
-                  "PID: %d, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
-                  proceso->PID, 
+                  "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
+                  proceso->PID,
+                  proceso->UID, 
+                  proceso->P,
+                  proceso->KCPU,
+                  user->KCPUxU,
                   proceso->fileName, 
                   context.regs[REG_AX], 
                   context.regs[REG_BX],
@@ -746,13 +751,14 @@ void process_update() {
         clear_window_part(process, 3, 2, 1, 76); 
     }
 
-    // Resto del código original...
-    mvwprintw(process, 4, 2, "-----------------------------------|LISTA|-----------------------------------");
+
+    mvwprintw(process, 4, 2, "--------------------------------------------------|LISTA|--------------------------------------------------");
     actual = listos->inicio;
     int fila = 5; 
     while (actual != NULL) {
+        User *user = uc_get_user(uc, actual->UID);
         char str[200];
-        pcb_as_str(actual, str, sizeof(str)); 
+        pcb_as_str(actual, str, sizeof(str), user); 
         mvwprintw(process, fila, 2, "%s", str);
         actual = actual->sig;
         fila++;
@@ -760,12 +766,13 @@ void process_update() {
 
     int fila_terminados = fila;
     clear_window_part(process, fila_terminados, 2, 18 - fila_terminados, 76);
-    mvwprintw(process, fila_terminados, 2, "---------------------------------|TERMINADOS|--------------------------------");
+    mvwprintw(process, fila_terminados, 2, "------------------------------------------------|TERMINADOS|-----------------------------------------------");
     actual = terminados->inicio;
     fila = fila_terminados + 1; 
     while (actual != NULL) {
+        User *user = uc_get_user(uc, actual->UID);
         char str[200];
-        pcb_as_str(actual, str, sizeof(str)); 
+        pcb_as_str(actual, str, sizeof(str), user); 
         mvwprintw(process, fila, 2, "%s", str);
         actual = actual->sig;
         fila++;

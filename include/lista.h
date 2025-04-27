@@ -21,7 +21,7 @@ typedef struct PCB {
     FILE *programa;
     struct inst instmem[128];
     struct PCB *sig;
-    int UID;
+    uint8_t UID;
     int P;
     float KCPU;
 } PCB;
@@ -60,7 +60,7 @@ typedef struct Cabecera {
 } Lista;
 
 void crearLista(Lista *);
-PCB *listaCreaNodo(struct cpu_context context, const char *file_name, int uid);
+PCB *listaCreaNodo(struct cpu_context context, const char *file_name, uint8_t uid);
 void listaInsertarFinal(Lista *, PCB *);
 PCB* listaBuscarPID(Lista *, int);
 PCB* listaExtraeInicio(Lista *);
@@ -68,7 +68,7 @@ PCB* listaExtraePrioridad(Lista *);
 PCB* listaExtraePID(Lista *, int);
 void liberarNodo(PCB *);
 void liberarLista(Lista *);
-void pcb_as_str(struct PCB *self, char *str, size_t size);
+void pcb_as_str(struct PCB *self, char *str, size_t size, User *user);
 bool uc_alloc_user(struct user_control *self, User *user);
 User *uc_get_user(struct user_control *self, uint8_t uid);
 bool uc_user_exists(struct user_control *self, uint8_t uid);

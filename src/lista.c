@@ -30,7 +30,7 @@ void crearLista(Lista *l) {
  * \return Retorna un puntero al nuevo nodo creado o NULL si falla la asignación de memoria.
  */
 PCB 
-*listaCreaNodo(struct cpu_context context, const char *file_name, int uid) {
+*listaCreaNodo(struct cpu_context context, const char *file_name, uint8_t uid) {
     PCB *nuevo_nodo = (PCB*)malloc(sizeof(PCB));
     if (nuevo_nodo) {
         nuevo_nodo->context = context;
@@ -281,15 +281,15 @@ void liberarLista(Lista *l){
  * \return No devuelve ningún valor (void).
  */
 void 
-pcb_as_str(struct PCB *self, char *str, size_t size)
+pcb_as_str(struct PCB *self, char *str, size_t size, User *user)
 {
     if (!self || !str || size == 0) {
         return;
     }
     char irstr[50];
     inst_to_str((struct inst *)&self->context.regs[REG_IR], irstr, sizeof(irstr));
-    snprintf(str, size, "PID: %d, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
-             self->PID, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
+    snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
+             self->PID, self->UID, self->P, self->KCPU, user->KCPUxU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
              self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
 }
 
