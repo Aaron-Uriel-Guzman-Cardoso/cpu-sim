@@ -293,8 +293,8 @@ pcb_as_str(struct PCB *self, char *str, size_t size, User *user)
             self->PID, self->UID, self->P, self->KCPU, user->KCPUxU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
             self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
     } else {
-        snprintf(str, size, "PID: %d, UID: %d, P: %d, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
-            self->PID, self->UID, self->P, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
+        snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: 0, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
+            self->PID, self->UID, self->P, self->KCPU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
             self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
     }
     
@@ -330,7 +330,12 @@ double uc_get_weight(struct user_control *self) {
 void
 uc_dealloc_user(struct user_control *self, uint8_t uid)
 {
-    self->current_users -= 1;
-    free(self->users[uid]);
-    self->users[uid] = NULL;
+    for (int i = 0; i < 256; i++) {
+        if (self->users[i] && self->users[i]->uid == uid) {
+            free(self->users[i]);
+            self->users[i] = NULL;
+            self->current_users -= 1;
+            break;
+        }
+    }
 }

@@ -309,12 +309,22 @@ eval(struct cmd *cmd) {
                     return -1;
                 }
 
-                User *user_new = crearUsuario(uid);
+                /*User *user_new = crearUsuario(uid);
 
                 if (!uc_user_exists(uc, uid))
                 {
                     uc_alloc_user(uc, user_new);
-                }    
+                }*/
+               
+                User *user_new;
+                if (!uc_user_exists(uc, uid)) {
+                    user_new = crearUsuario(uid);
+                    user_new->process_counter = 0;
+                    uc_alloc_user(uc, user_new);
+                } else {
+                    user_new = uc_get_user(uc, uid);
+                }
+
                 char mensaje[300];
                 snprintf(mensaje, sizeof(mensaje), "Cargando archivo: %s\n", cmd->arg1);
                 msg_log(LOG_LEVEL_INFO, mensaje);
@@ -334,7 +344,7 @@ eval(struct cmd *cmd) {
                 //nuevo_proceso->KCPUxU = 0;
                 if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
                     listaInsertarFinal(listos, nuevo_proceso);
-                    user_new ->process_counter += 1;
+                    user_new -> process_counter += 1;
                     msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
                     process_update();
                 } else {
