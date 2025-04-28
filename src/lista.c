@@ -288,9 +288,16 @@ pcb_as_str(struct PCB *self, char *str, size_t size, User *user)
     }
     char irstr[50];
     inst_to_str((struct inst *)&self->context.regs[REG_IR], irstr, sizeof(irstr));
-    snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
-             self->PID, self->UID, self->P, self->KCPU, user->KCPUxU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
-             self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
+    if (user) {
+        snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
+            self->PID, self->UID, self->P, self->KCPU, user->KCPUxU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
+            self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
+    } else {
+        snprintf(str, size, "PID: %d, UID: %d, P: %d, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
+            self->PID, self->UID, self->P, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
+            self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
+    }
+    
 }
 
 /*void insertarName(fileList *names, char *fileName){
@@ -313,5 +320,17 @@ pcb_as_str(struct PCB *self, char *str, size_t size, User *user)
  * \return Retorna el peso del usuario.
  */
 double uc_get_weight(struct user_control *self) {
-    return 1.0/self->current_users;
+    return (self->current_users)? 1.0/self->current_users: 1.0;
+}
+
+
+/**
+ * \brief Libera el espacio de un usuario, quitándolo de los usuarios activos
+ */
+void
+uc_dealloc_user(struct user_control *self, uint8_t uid)
+{
+    self->current_users -= 1;
+    free(self->users[uid]);
+    self->users[uid] = NULL;
 }

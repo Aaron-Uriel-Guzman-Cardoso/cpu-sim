@@ -12,6 +12,7 @@
 #include <ncurses_utilities.h>
 #include <insts.h>
 #include <lista.h>
+#include <assert.h>
 
 #include "../include/cpu.h"
 
@@ -333,6 +334,7 @@ eval(struct cmd *cmd) {
                 //nuevo_proceso->KCPUxU = 0;
                 if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
                     listaInsertarFinal(listos, nuevo_proceso);
+                    user_new ->process_counter += 1;
                     msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
                     process_update();
                 } else {
@@ -499,9 +501,6 @@ void ejecutarProcesos(int32_t *quantum) {
                 }
                 listaInsertarFinal(listos, running);
 
-                User *current_user = NULL;
-
-
                 PCB *current_process = listos->inicio;
                 do {
                     current_process->KCPU /= 2;
@@ -528,12 +527,23 @@ void ejecutarProcesos(int32_t *quantum) {
                     User *user = uc_get_user(uc, finished->UID);
                     if (user) {
                         user->KCPUxU += (*quantum) * IncCPU;
+                        /*
+                         * Nunca deberíamos de quitar procesos a un usuario,
+                         * que no tiene procesos. Si esto sucede es un error
+                         * lógico grave.
+                         */
+                        assert(user->process_counter != 0);
+                        user->process_counter -= 1;
+                        if (user->process_counter == 0) {
+                            uc_dealloc_user(uc, user->uid);
+                        }
                     }
                     if (finished == NULL) {
                         msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
                         return;
                     }
                     finished->context = cpu_dump_context(cpu);
+
                     listaInsertarFinal(terminados, finished);
                     *quantum = 0;
                     cpu_reset(cpu);
