@@ -154,6 +154,12 @@ PCB* listaExtraePrioridad(Lista *l) {
     return min_nodo;
 }
 
+/**
+ * \brief Verifica si un usuario existe en el arreglo de usuarios.
+ * \param self Puntero al control de usuarios.
+ * \param uid UID del usuario que se desea verificar.
+ * \return Retorna true si el usuario existe, false en caso contrario.
+ */
 bool uc_user_exists(struct user_control *self, uint8_t uid) {
     if(self->current_users == 0) {
         return false;
@@ -168,6 +174,12 @@ bool uc_user_exists(struct user_control *self, uint8_t uid) {
     return false;
 }
 
+
+/**
+ * \brief Crea un nuevo usuario.
+ * \param uid UID del nuevo usuario.
+ * \return Retorna un puntero al nuevo usuario creado o NULL si falla la asignación de memoria.
+ */
 User *crearUsuario(uint8_t uid) {
     User *user = malloc(sizeof(User));
     if (user) {
@@ -198,6 +210,12 @@ User *uc_get_user(struct user_control *self, uint8_t uid) {
     return NULL;
 }
 
+/**
+ * \brief Asigna un usuario al arreglo de usuarios.
+ * \param self Puntero al control de usuarios.
+ * \param user Puntero al usuario que se desea asignar.
+ * \return Retorna true si no hay espacio y no se puede asignar el usuario.
+ */
 bool
 uc_alloc_user(struct user_control *self, User *user)
 {
@@ -326,6 +344,9 @@ double uc_get_weight(struct user_control *self) {
 
 /**
  * \brief Libera el espacio de un usuario, quitándolo de los usuarios activos
+ * \param self Puntero al control de usuarios.
+ * \param uid UID del usuario que se desea liberar.
+ * \return No devuelve ningún valor (void).
  */
 void
 uc_dealloc_user(struct user_control *self, uint8_t uid)
