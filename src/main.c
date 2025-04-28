@@ -58,7 +58,7 @@ struct timespec cpu_period = { 0, 500000000 }; /* Frecuencia de ejecucón de la 
 struct timespec last_process_update = { 0 };
 struct timespec process_update_period = { 0, 500000000 }; // Actualizar cada 500 ms
 
-const int32_t MAX_QUANTUM = 5;
+const int32_t MAX_QUANTUM = 4;
 
 const int32_t PBase = PBASE;
 //User users[20] = {0};
