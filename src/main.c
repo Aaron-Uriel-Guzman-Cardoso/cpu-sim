@@ -68,10 +68,11 @@ const int32_t MAX_QUANTUM = 4;
 const int32_t PBase = PBASE;
 //User users[20] = {0};
 //int numUs = 0;
-//float W = 0.0;
 float IncCPU = 60/MAX_QUANTUM;
 
 struct user_control *uc;
+
+double W = 0.0; // Peso de la CPU
 
 /**
  * \brief Verifica si un usuario ya existe en la lista de usuarios.
@@ -377,6 +378,17 @@ eval(struct cmd *cmd) {
             if ((proceso = listaExtraePID(listos, pid)) != NULL) {
                 proceso->context = cpu_dump_context(cpu);
                 listaInsertarFinal(terminados, proceso);
+
+                User *user = uc_get_user(uc, proceso->UID);
+                if (user) {
+                    assert(user->process_counter > 0);
+                    user->process_counter -= 1;
+                    if (user->process_counter == 0) {
+                        update_user_stats(user->uid, user->KCPUxU);
+                        uc_dealloc_user(uc, user->uid);
+                    }
+                }
+
                 char mensaje[300];
                 snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
                 msg_log(LOG_LEVEL_INFO, mensaje);
@@ -384,6 +396,17 @@ eval(struct cmd *cmd) {
             } else if ((proceso = listaExtraePID(ejecucion, pid)) != NULL) {
                 proceso->context = cpu_dump_context(cpu);
                 listaInsertarFinal(terminados, proceso);
+
+                User *user = uc_get_user(uc, proceso->UID);
+                if (user) {
+                    assert(user->process_counter > 0);
+                    user->process_counter -= 1;
+                    if (user->process_counter == 0) {
+                        update_user_stats(user->uid, user->KCPUxU);
+                        uc_dealloc_user(uc, user->uid);
+                    }
+                }
+
                 char mensaje[300];
                 snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
                 msg_log(LOG_LEVEL_INFO, mensaje);
@@ -460,6 +483,7 @@ void ejecutarProcesos(int32_t *quantum) {
     // Si no hay proceso en ejecución y hay procesos en listos, mover el proceso con menor prioridad a Ejecución
     if (ejecucion->inicio == NULL && listos->inicio != NULL) {
         PCB *proceso = listaExtraePrioridad(listos);
+
         listaInsertarFinal(ejecucion, proceso);
         *quantum = 0; // Reiniciar el quantum
         
@@ -530,6 +554,8 @@ void ejecutarProcesos(int32_t *quantum) {
 
                 cpu_reset(cpu);
                 process_update();
+                //struct timespec pausa = { .tv_sec = 1, .tv_nsec = 0 }; // 1 segundo
+                //clock_nanosleep(CLOCK_MONOTONIC, 0, &pausa, NULL);
                 return; // Salir para no procesar más eventos en este ciclo
             }
             
@@ -748,6 +774,7 @@ void process_update() {
     }
 
     uint8_t numUsers = uc->current_users; 
+    //W = uc_get_weight(uc);
 
     // Mostrar el conteo de archivos únicos activos (ejecución + listos)
     mvwprintw(process, 1, 2, "Archivos únicos activos: %d   Usuarios activos: %d", unique_files, numUsers);
@@ -877,11 +904,19 @@ main(void) {
         ejecutarProcesos(&quantum);
         counterWin();
 
-        /**
+        /**f
          * TODO: evitar que la ventana de procesos se actualice tan seguido
          */
         process_update();
-        regwin_update();
+
+        /*struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        long elapsed_ns = (now.tv_sec - last_process_update.tv_sec) * 1000000000L +
+                        (now.tv_nsec - last_process_update.tv_nsec);
+        if (elapsed_ns >= process_update_period.tv_nsec) {
+            process_update();
+            last_process_update = now;
+        }*/
 
         wrefresh(counter);
         wrefresh(prompt.win);
