@@ -799,7 +799,7 @@ void process_update() {
     while (actual != NULL) {
         User *user = uc_get_user(uc, actual->UID);
         char str[200];
-        float kcpuxu = user ? user->KCPUxU : get_user_stats(actual->UID);
+        float kcpuxu = get_user_stats(actual->UID);
         pcb_as_str_kcpuxu(actual, str, sizeof(str), kcpuxu); 
         mvwprintw(process, fila, 2, "%s", str);
         actual = actual->sig;
