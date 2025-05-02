@@ -45,7 +45,7 @@ bool uc_user_exists(struct user_control *self, uint8_t uid);
 User *uc_get_user(struct user_control *self, uint8_t uid);
 bool uc_alloc_user(struct user_control *self, User *user);
 double uc_get_weight(struct user_control *self);
-void uc_dealloc_user(struct user_control *self, uint8_t uid);
+//void uc_dealloc_user(struct user_control *self, uint8_t uid);
 
 /**
  * \brief Coloca el usuario recién creado en el arreglo de usuarios

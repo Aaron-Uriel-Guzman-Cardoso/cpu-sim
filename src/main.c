@@ -359,7 +359,6 @@ eval(struct cmd *cmd) {
                 msg_log(LOG_LEVEL_ERROR, "Falta el ID de usuario");
                 return -1;
             }
-            
         }
     }else if (strncmp(cmd->name, "KILL", 4) == 0) {
         if (cmd->arg1[0] == '\0') {
@@ -537,15 +536,13 @@ void ejecutarProcesos(int32_t *quantum) {
                     User *user = uc_get_user(uc, finished->UID);
                     if (user) {
                         user->KCPUxU += (*quantum) * IncCPU;
-                        /*
-                         * Nunca deberíamos de quitar procesos a un usuario,
-                         * que no tiene procesos. Si esto sucede es un error
-                         * lógico grave.
-                         */
-                        assert(user->process_counter != 0);
-                        user->process_counter -= 1;
-                        if (user->process_counter == 0) {
-                            uc_dealloc_user(uc, user->uid);
+                        if (user->process_counter > 0) {
+                            user->process_counter -= 1;
+                            if (user->process_counter == 0 && uc->current_users > 0) {
+                                uc->current_users -= 1;
+                            }
+                        } else {
+                            //msg_log(LOG_LEVEL_ERROR, "Inconsistencia: process_counter ya es 0");
                         }
                     }
                     if (finished == NULL) {
@@ -801,6 +798,9 @@ void process_update() {
     if (fila < 18) {
         clear_window_part(process, fila, 2, 18 - fila, 76); 
     }
+    /*if (uc_get_user(uc, 1) && uc_get_user(uc, 2)) {
+        mvwprintw(process, 10, 2, "%d %d\n", uc_get_user(uc, 1)->process_counter, uc_get_user(uc, 1)->process_counter);
+    }*/
 
     wrefresh(process); 
 }

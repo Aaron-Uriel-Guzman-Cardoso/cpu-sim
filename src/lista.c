@@ -197,9 +197,6 @@ User *crearUsuario(uint8_t uid) {
  */
 
 User *uc_get_user(struct user_control *self, uint8_t uid) {
-    if(self->current_users == 0) {
-        return NULL;
-    }
     for (int i = 0; i < 256; i++) {
         if (self->users[i]) {
             if (self->users[i]->uid == uid) {
@@ -306,15 +303,10 @@ pcb_as_str(struct PCB *self, char *str, size_t size, User *user)
     }
     char irstr[50];
     inst_to_str((struct inst *)&self->context.regs[REG_IR], irstr, sizeof(irstr));
-    if (user) {
-        snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
-            self->PID, self->UID, self->P, self->KCPU, user->KCPUxU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
-            self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
-    } else {
-        snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: 0, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
-            self->PID, self->UID, self->P, self->KCPU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
-            self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
-    }
+    assert(user);
+    snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
+        self->PID, self->UID, self->P, self->KCPU, user->KCPUxU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
+        self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
     
 }
 
@@ -347,7 +339,7 @@ double uc_get_weight(struct user_control *self) {
  * \param self Puntero al control de usuarios.
  * \param uid UID del usuario que se desea liberar.
  * \return No devuelve ningún valor (void).
- */
+ 
 void
 uc_dealloc_user(struct user_control *self, uint8_t uid)
 {
@@ -360,3 +352,4 @@ uc_dealloc_user(struct user_control *self, uint8_t uid)
         }
     }
 }
+*/
