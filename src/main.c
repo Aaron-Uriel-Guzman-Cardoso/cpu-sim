@@ -532,6 +532,7 @@ void ejecutarProcesos(int32_t *quantum) {
                     msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
                     return;
                 }
+                // Guardar el contexto del proceso que se va a interrumpir y actualizar el consumo del cpu de dicho proceso y usuario.
                 running->context = cpu_dump_context(cpu);
                 running->KCPU += (*quantum) * IncCPU;
                 User *user = uc_get_user(uc, running->UID);
@@ -541,6 +542,7 @@ void ejecutarProcesos(int32_t *quantum) {
                 }
                 listaInsertarFinal(listos, running);
 
+                // Obtiene la nueva prioridad para todos los procesos en listos
                 PCB *current_process = listos->inicio;
                 do {
                     current_process->KCPU /= 2;
