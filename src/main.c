@@ -19,6 +19,11 @@
 #define MAX_CMD_CHARS 50
 #define HISTORY_SIZE 3
 #define PBASE 60
+#define MAX_USER_STATS 256
+
+UserStats user_stats[MAX_USER_STATS];
+int user_stats_count = 0;
+
 
 struct cmd {
     char name[MAX_CMD_CHARS];
@@ -508,6 +513,7 @@ void ejecutarProcesos(int32_t *quantum) {
                 User *user = uc_get_user(uc, running->UID);
                 if (user) {
                     user->KCPUxU += (*quantum) * IncCPU;
+                    update_user_stats(user->uid, user->KCPUxU);
                 }
                 listaInsertarFinal(listos, running);
 
@@ -545,6 +551,7 @@ void ejecutarProcesos(int32_t *quantum) {
                         assert(user->process_counter != 0);
                         user->process_counter -= 1;
                         if (user->process_counter == 0) {
+                            update_user_stats(user->uid, user->KCPUxU);
                             uc_dealloc_user(uc, user->uid);
                         }
                     }
@@ -792,7 +799,8 @@ void process_update() {
     while (actual != NULL) {
         User *user = uc_get_user(uc, actual->UID);
         char str[200];
-        pcb_as_str(actual, str, sizeof(str), user); 
+        float kcpuxu = user ? user->KCPUxU : get_user_stats(actual->UID);
+        pcb_as_str_kcpuxu(actual, str, sizeof(str), kcpuxu); 
         mvwprintw(process, fila, 2, "%s", str);
         actual = actual->sig;
         fila++;

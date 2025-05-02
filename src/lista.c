@@ -11,6 +11,8 @@
 #include <insts.h>
 #include <lista.h>
 
+#define MAX_USER_STATS 256
+
 static int globalPID = 1;
 
 /**
@@ -232,6 +234,30 @@ uc_alloc_user(struct user_control *self, User *user)
     return true;
 }
 
+void update_user_stats(uint8_t uid, float value) {
+    for (int i = 0; i < user_stats_count; i++) {
+        if (user_stats[i].uid == uid) {
+            user_stats[i].KCPUxU = value;
+            return;
+        }
+    }
+    // Si no existe, agregar nuevo
+    if (user_stats_count < MAX_USER_STATS) {
+        user_stats[user_stats_count].uid = uid;
+        user_stats[user_stats_count].KCPUxU = value;
+        user_stats_count++;
+    }
+}
+
+float get_user_stats(uint8_t uid) {
+    for (int i = 0; i < user_stats_count; i++) {
+        if (user_stats[i].uid == uid) {
+            return user_stats[i].KCPUxU;
+        }
+    }
+    return 0.0f;
+} 
+
 /**
  * \brief Extrae un nodo de la lista por su PID.
  * \param l Puntero a la lista de donde se extraerá el nodo.
@@ -311,11 +337,22 @@ pcb_as_str(struct PCB *self, char *str, size_t size, User *user)
             self->PID, self->UID, self->P, self->KCPU, user->KCPUxU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
             self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
     } else {
-        snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: 0, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
-            self->PID, self->UID, self->P, self->KCPU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
+        snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
+            self->PID, self->UID, self->P, self->KCPU, 0.0, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
             self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
     }
     
+}
+
+void pcb_as_str_kcpuxu(struct PCB *self, char *str, size_t size, float KCPUxU) {
+    if (!self || !str || size == 0) {
+        return;
+    }
+    char irstr[50];
+    inst_to_str((struct inst *)&self->context.regs[REG_IR], irstr, sizeof(irstr));
+    snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
+        self->PID, self->UID, self->P, self->KCPU, KCPUxU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
+        self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
 }
 
 /*void insertarName(fileList *names, char *fileName){
