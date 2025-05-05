@@ -354,6 +354,20 @@ pcb_as_str(struct PCB *self, char *str, size_t size, User *user)
     
 }
 
+void 
+pcb_as_str_kcpuxu(struct PCB *self, char *str, size_t size, float kcpuxu)
+{
+    if (!self || !str || size == 0) {
+        return;
+    }
+    char irstr[50];
+    inst_to_str((struct inst *)&self->context.regs[REG_IR], irstr, sizeof(irstr));
+    snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
+    self->PID, self->UID, self->P, self->KCPU, kcpuxu, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
+    self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
+    
+}
+
 /*void insertarName(fileList *names, char *fileName){
     fileTitle *newName = malloc(sizeof(fileTitle));
     newName->fileName = fileName;
