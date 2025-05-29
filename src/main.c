@@ -13,6 +13,7 @@
 #include <insts.h>
 #include <lista.h>
 #include <assert.h>
+#include <os.h>
 
 #include "../include/cpu.h"
 
@@ -52,6 +53,10 @@ enum prompt_status {
     PROMPT_STATUS_INSTRUCTION_DECODED
 };
 
+
+struct os {
+    uint32_t tms[MAX_AVAILABLE_FRAMES];
+};
 Lista *listos, *ejecucion, *terminados;
 
 WINDOW *reg;
@@ -813,6 +818,28 @@ void process_update() {
     wrefresh(process); 
 }
 
+/**
+ * \brief Regresa el PID del proceso que está manejando el sistema operativo
+ * 
+ * Obtenemos el identificador único del proceso actual por el que se está 
+ * preocupando el SO, esto existe para exponer el estado del SO y así permitir
+ * la comunicación con otros dispositivos de la computadora simulada (como el
+ * MMU).
+ * 
+ * \returns PID de proceso en ejecución, 0 en caso de no tener procesos en
+ *          ejecución (algo que no debería suceder).
+ */
+uint32_t
+os_get_curr_pid()
+{
+    return (ejecucion && ejecucion->inicio)? ejecucion->inicio->PID : 0;
+}
+
+struct PCB *
+os_get_proc(uint16_t pid)
+{
+    if (ejecucion)
+}
 
 /**
  * \brief Función principal del programa.

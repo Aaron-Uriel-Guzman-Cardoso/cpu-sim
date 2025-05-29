@@ -12,6 +12,8 @@
 #include <insts.h>
 #include <time.h>
 #include <queue.h>
+#include <mmu.h>
+#include <swap.h>
 
 
 /**
@@ -658,8 +660,8 @@ cpu_next_cycle(struct cpu *self)
          * PC a la siguiente siguiente instrucción.
          */
         memset(&self->regs[REG_IR], 0, sizeof(self->regs[REG_IR]));
-        memcpy(&self->regs[REG_IR], &self->instmem[self->regs[REG_PC]],
-               sizeof(self->instmem[self->regs[REG_PC]]));
+        struct inst inst = mmu_get_inst(self->regs[REG_PC]);
+        memcpy(&self->regs[REG_IR], &inst, sizeof(inst));
         self->regs[REG_PC] += 1;
     } else {
         /**

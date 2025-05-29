@@ -52,9 +52,6 @@ struct cpu {
      * 
      * La memoria para las instrucciones será un arreglo de INSTS_MAX,
      * esperando que ningún programa se acerque a esto.
-     * 
-     * TODO: implementar arreglo dinámico para instrucciones, con el fin de
-     *       soportar programas arbitrariamente largos.
      */
     struct inst instmem[INSTS_MAX];
 };

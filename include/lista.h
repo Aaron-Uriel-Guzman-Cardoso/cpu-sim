@@ -27,6 +27,9 @@ typedef struct PCB {
     uint8_t UID;
     int P;
     float KCPU;
+    int32_t *tmp;           // Tabla de marcos del proceso (TMP)
+    size_t tmp_size;       // Tamaño de TMP (marcos usados)
+    int program_size;   // Total de instrucciones del programa
 } PCB;
 
 
