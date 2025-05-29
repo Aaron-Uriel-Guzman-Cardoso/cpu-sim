@@ -101,6 +101,29 @@ void swap_fetch_instruction(PCB *pcb, char *instr_buffer) {
     instr_buffer[INSTR_SIZE] = '\0';
 }
 
+// Verifica si un proceso tiene hermanos
+bool has_brothers(PCB *pcb, Lista *listos, Lista *ejecucion) {
+    PCB *current = listos->inicio;
+    while (current) {
+        if (current != pcb && current->UID == pcb->UID && 
+            strcmp(current->fileName, pcb->fileName) == 0) {
+            return true;
+        }
+        current = current->sig;
+    }
+    
+    current = ejecucion->inicio;
+    while (current) {
+        if (current != pcb && current->UID == pcb->UID && 
+            strcmp(current->fileName, pcb->fileName) == 0) {
+            return true;
+        }
+        current = current->sig;
+    }
+    
+    return false;
+}
+
 // Mostrar contenido de un marco
 bool swap_display_frame(WINDOW *win, int frame_num) {
     char buffer[INSTR_SIZE + 1];

@@ -3,20 +3,21 @@
 
 #include <stdio.h>
 #include <stdbool.h>
-#include "lista.h"  
+#include "lista.h"
 
-// Constantes
-#define SWAP_SIZE 65536       
-#define FRAME_SIZE 16         
-#define TOTAL_FRAMES 4096     
-#define INSTR_SIZE 8   
+// Constantes para la memoria SWAP
+#define SWAP_SIZE 65536       // Total de instrucciones en SWAP
+#define FRAME_SIZE 16         // Instrucciones por marco
+#define TOTAL_FRAMES 4096     // SWAP_SIZE / FRAME_SIZE
+#define INSTR_SIZE 32         // Bytes por instrucción
 
-// Tabla de Mapa de Swap (TMS)
+// Entrada en la Tabla de Mapa de Swap (TMS)
 typedef struct {
-    int pid;                  
-    int referenced;                   
+    int pid;                  // PID del proceso dueño (-1 si libre)
+    int referenced;           // Para algoritmos de reemplazo
 } FrameEntry;
 
+// Prototipos de funciones
 void swap_init();
 void swap_close();
 int swap_allocate_frames(PCB *pcb);
@@ -28,5 +29,6 @@ int swap_calculate_frames(int program_size);
 bool swap_display_frame(WINDOW *win, int frame_num);
 void swap_display_map(WINDOW *win);
 int swap_get_free_frame_count();
+bool has_brothers(PCB *pcb, Lista *listos, Lista *ejecucion);
 
 #endif

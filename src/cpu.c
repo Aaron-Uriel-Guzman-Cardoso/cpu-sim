@@ -476,7 +476,7 @@ cpu_prepare(struct cpu *self)
      *        verificamos por si acaso que esta quepa sin problemas
      */
     assert(sizeof(self->instmem[0]) <= sizeof(self->regs[REG_IR]));
-
+    
     /**
      * Cargamos primer instrucción y actualizamos PC para que apunte a
      * siguiente instrucción.

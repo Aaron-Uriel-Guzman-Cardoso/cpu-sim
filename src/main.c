@@ -936,12 +936,13 @@ main(void) {
         clock_nanosleep(CLOCK_MONOTONIC, 0, &update_delay, NULL);
     }
 
+    swap_close();
+
     // Liberar la memoria
     liberarLista(listos);
     liberarLista(ejecucion);
     liberarLista(terminados);
 
     endwin();
-    swap_close();
     return 0;
 }
