@@ -13,6 +13,7 @@
 #include <insts.h>
 #include <lista.h>
 #include <assert.h>
+#include <swap.h>
 
 #include "../include/cpu.h"
 
@@ -299,6 +300,7 @@ eval(struct cmd *cmd) {
         msg_log(LOG_LEVEL_INFO, "Saliendo del programa...\n");
         endwin();
         printf("\n");
+        swap_close();
         exit(0);
     } 
     else if (strncmp(cmd->name, "LOAD", 4) == 0) {
@@ -861,6 +863,8 @@ main(void) {
     msg_init();
     process_init();
 
+    swap_init();
+
     struct prompt prompt;
     reg = newwin(7, 80, 10, 0);
     box(reg, 0, 0);
@@ -938,5 +942,6 @@ main(void) {
     liberarLista(terminados);
 
     endwin();
+    swap_close();
     return 0;
 }
