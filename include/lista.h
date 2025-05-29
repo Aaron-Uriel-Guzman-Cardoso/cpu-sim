@@ -88,7 +88,7 @@ PCB* listaExtraePID(Lista *, int);
 void liberarNodo(PCB *);
 void liberarLista(Lista *);
 void pcb_as_str(struct PCB *self, char *str, size_t size, User *user);
-void pcb_as_str_kcpuxu(struct PCB *self, char *str, size_t size, float KCPUxU);
+void pcb_as_str_kcpuxu(struct PCB *self, char *str, size_t size, float kcpuxu);
 bool uc_alloc_user(struct user_control *self, User *user);
 User *uc_get_user(struct user_control *self, uint8_t uid);
 bool uc_user_exists(struct user_control *self, uint8_t uid);

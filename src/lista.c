@@ -200,7 +200,6 @@ User *crearUsuario(uint8_t uid) {
  * \param uid UID del usuario que se desea buscar.
  * \return Retorna un puntero al usuario encontrado o NULL si no se encuentra.
  */
-
 User *uc_get_user(struct user_control *self, uint8_t uid) {
     if(self->current_users == 0) {
         return NULL;
@@ -237,6 +236,12 @@ uc_alloc_user(struct user_control *self, User *user)
     return true;
 }
 
+/**
+ * \brief Actualiza las estadísticas de un usuario.
+ * \param uid UID del usuario que se desea actualizar.
+ * \param value Valor a asignar a KCPUxU.
+ * \return No devuelve ningún valor (void).
+ */
 void update_user_stats(uint8_t uid, float value) {
     for (int i = 0; i < user_stats_count; i++) {
         if (user_stats[i].uid == uid) {
@@ -252,6 +257,11 @@ void update_user_stats(uint8_t uid, float value) {
     }
 }
 
+/**
+ * \brief Obtiene las estadísticas de un usuario.
+ * \param uid UID del usuario que se desea obtener.
+ * \return Retorna el valor de KCPUxU del usuario o 0.0 si no se encuentra.
+ */
 float get_user_stats(uint8_t uid) {
     for (int i = 0; i < user_stats_count; i++) {
         if (user_stats[i].uid == uid) {
@@ -347,15 +357,18 @@ pcb_as_str(struct PCB *self, char *str, size_t size, User *user)
     
 }
 
-void pcb_as_str_kcpuxu(struct PCB *self, char *str, size_t size, float KCPUxU) {
+void 
+pcb_as_str_kcpuxu(struct PCB *self, char *str, size_t size, float kcpuxu)
+{
     if (!self || !str || size == 0) {
         return;
     }
     char irstr[50];
     inst_to_str((struct inst *)&self->context.regs[REG_IR], irstr, sizeof(irstr));
     snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
-        self->PID, self->UID, self->P, self->KCPU, KCPUxU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
-        self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
+    self->PID, self->UID, self->P, self->KCPU, kcpuxu, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
+    self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
+    
 }
 
 /*void insertarName(fileList *names, char *fileName){
@@ -378,7 +391,7 @@ void pcb_as_str_kcpuxu(struct PCB *self, char *str, size_t size, float KCPUxU) {
  * \return Retorna el peso del usuario.
  */
 double uc_get_weight(struct user_control *self) {
-    return (self->current_users)? 1.0/self->current_users: 1.0;
+    return (self->current_users)? 1.0/self->current_users: 0.0;
 }
 
 
