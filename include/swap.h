@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <ncurses.h>
 #include "lista.h"
 
 // Constantes para la memoria SWAP
@@ -22,7 +23,8 @@ void swap_init();
 void swap_close();
 int swap_allocate_frames(PCB *pcb);
 void swap_free_frames(int pid);
-void swap_load_program(PCB *pcb, const char *filename);
+bool swap_load_program(PCB *pcb, const char *filename);
+bool swap_load_program1(PCB *pcb, const char *filename);
 struct inst swap_get(uint16_t frame, uint8_t offset);
 long swap_translate_address(PCB *pcb, int virtual_address);
 int swap_calculate_frames(int program_size);
@@ -30,5 +32,6 @@ bool swap_display_frame(WINDOW *win, int frame_num);
 void swap_display_map(WINDOW *win);
 int swap_get_free_frame_count();
 bool has_brothers(PCB *pcb, Lista *listos, Lista *ejecucion);
+int count_instructions_in_file(FILE *file);
 
 #endif

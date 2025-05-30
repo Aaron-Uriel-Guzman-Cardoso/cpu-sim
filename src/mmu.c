@@ -4,6 +4,8 @@
 #include <os.h>
 #include <lista.h>
 #include <swap.h>
+#include <assert.h>
+#include <ncurses.h>
 
 struct inst mmu_get_inst(uint16_t addr);
 

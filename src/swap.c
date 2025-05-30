@@ -80,14 +80,62 @@ void swap_free_frames(int pid) {
  * legible para la CPU. Espera que el programa ya tenga marcos asignados en
  * memoria con `swap_allocate_frames()` y no vuelve a cargar este programa
  * si ya existe para el mismo usuario.
- */
-void swap_load_program(PCB *pcb, const char *filename) {
+ * 
+ * \return Si hubo algún error al cargar el programa se devuelve true
+bool
+swap_load_program(PCB *pcb, const char *filename)
+{
     FILE *program = fopen(filename, "r");
+     int32_t num_lines = count_instructions_in_file(program);
+    const int INST_STR_SIZE = 32; // Tamaño máximo de una instrucción en formato de cadena
+    char buffer[INST_STR_SIZE + 1];
+    size_t program_size = 0;
+    while (fgets(buffer, INST_STR_SIZE, program)) {
+        struct inst *inst = inst_from_str(buffer);
+        long real_addr = (pcb->tmp[i] * FRAME_SIZE + j) * INSTR_SIZE;
+        fseek(swapfile, real_addr, SEEK_SET);
+        fwrite(inst, INSTR_SIZE, 1, swapfile);
+    }
+    fclose(program);
+    fflush(swapfile);
+}*/
+
+
+/**
+ * \brief Cuenta la cantidad de instrucciones en un archivo de programa
+ * \param filename Nombre del archivo a analizar
+ * \return La cantidad de instrucciones encontradas, o -1 si hubo un error al abrir el archivo.
+ */
+int count_instructions_in_file(FILE *file) {
+    if (!file) { return -1; }
+    size_t count = 0;
+    char buffer[128];
+    while (fgets(buffer, sizeof(buffer), file)) {
+        // Opcional: saltar líneas vacías o comentarios
+        char *ptr = buffer;
+        if (*ptr == '\n' || *ptr == '\0') continue;
+        count++;
+    }
+    return count;
+}
+
+bool
+swap_load_program1(PCB *pcb, const char *filename)
+{
+    FILE *program = fopen(filename, "r");
+    int32_t num_lines = count_instructions_in_file(program);
     char buffer[33];
-    
+
+    pcb->program_size = num_lines;
+
+    if (swap_allocate_frames(pcb) < 0) {
+        fclose(program);
+        return true; // No hay suficientes marcos disponibles
+    }
+
     for (int i = 0; i < pcb->tmp_size; i++) {
         for (int j = 0; j < FRAME_SIZE; j++) {
-            if (fgets(buffer, INSTR_SIZE, program)) {
+            if (fgets(buffer, 33, program)) {
                 struct inst *inst = inst_from_str(buffer);
                 long real_addr = (pcb->tmp[i] * FRAME_SIZE + j) * INSTR_SIZE;
                 fseek(swapfile, real_addr, SEEK_SET);
@@ -97,6 +145,7 @@ void swap_load_program(PCB *pcb, const char *filename) {
     }
     fclose(program);
     fflush(swapfile);
+    return false;
 }
 
 /**

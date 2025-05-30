@@ -47,13 +47,6 @@ struct cpu {
     int64_t regs[REG_LIMIT];     /**< Registros de la CPU */
     struct queue *events;        /**< Cola con todos los eventos que no se han consultado
                                       de la CPU */
-    /**
-     * \brief Memoria donde se almacenan las instrucciones.
-     * 
-     * La memoria para las instrucciones será un arreglo de INSTS_MAX,
-     * esperando que ningún programa se acerque a esto.
-     */
-    struct inst instmem[INSTS_MAX];
 };
 
 struct cpu *cpu_new(void);
@@ -65,6 +58,6 @@ void cpu_set_freq(struct cpu *self, double freq);
 double cpu_get_freq(struct cpu *self);
 int32_t cpu_sync(struct cpu *self);
 enum cpu_event cpu_poll_event(struct cpu *self);
-int32_t cpu_load_from_context(struct cpu *self, struct cpu_context context, struct inst instmem[128]);
+int32_t cpu_load_from_context(struct cpu *self, struct cpu_context context);
 
 #endif

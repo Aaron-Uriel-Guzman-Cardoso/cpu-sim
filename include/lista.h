@@ -22,7 +22,6 @@ typedef struct PCB {
     uint32_t PID;
     char fileName[256];
     FILE *programa;
-    struct inst instmem[128];
     struct PCB *sig;
     uint8_t UID;
     int P;

@@ -14,6 +14,7 @@
 #include <lista.h>
 #include <assert.h>
 #include <os.h>
+#include <swap.h>
 
 #include "../include/cpu.h"
 
@@ -350,6 +351,7 @@ eval(struct cmd *cmd) {
 
                 // Crear un nuevo proceso y lo agrega a la lista
                 PCB *nuevo_proceso = listaCreaNodo((struct cpu_context) { 0 }, cmd->arg1, uid);
+                swap_load_program1(nuevo_proceso, cmd->arg1);
                 nuevo_proceso->P = PBase;
                 nuevo_proceso->KCPU = 0;
                 //nuevo_proceso->KCPUxU = 0;
@@ -448,7 +450,7 @@ eval(struct cmd *cmd) {
  * \param fileName Nombre del archivo que representa el programa asociado al proceso.
  *
  * \return No devuelve ningún valor (void).
- */
+ 
 void cargarProceso(Lista *listos, const char *fileName) {
     uint8_t uid = 0;
     PCB *proceso = listaCreaNodo((struct cpu_context) {0}, fileName, uid);
@@ -470,7 +472,7 @@ void cargarProceso(Lista *listos, const char *fileName) {
             free(proceso);
         }
     }
-}
+}*/
 
 /**
  * \brief Ejecuta los procesos en la lista de ejecución y maneja los eventos de la CPU.
@@ -491,12 +493,12 @@ void ejecutarProcesos(int32_t *quantum) {
 
         listaInsertarFinal(ejecucion, proceso);
         *quantum = 0; // Reiniciar el quantum
-        
+        /** TODO: modificar código para que trabaje de acuerdo a la forma nueva en que dejamos el programa en swap */
         // Verificar si el proceso ya tiene contexto previo (fue interrumpido por quantum)
         if (proceso->context.regs[REG_PC] > 1) {
             // El proceso ya se ejecutó antes - restaurar su contexto
             cpu_reset(cpu);
-            if (cpu_load_from_context(cpu, proceso->context, proceso->instmem) != 0) {
+            if (cpu_load_from_context(cpu, proceso->context) != 0) {
                 char logstr[350];
                 snprintf(logstr, sizeof(logstr), "Error al cargar el contexto del proceso %d\n", proceso->PID);
                 msg_log(LOG_LEVEL_ERROR, logstr);
@@ -505,7 +507,6 @@ void ejecutarProcesos(int32_t *quantum) {
             }
         } else {
             // Primera ejecución del proceso - cargar desde archivo
-            cpu_reset(cpu);
             if (cpu_load_insts_from_file(cpu, proceso->fileName) != 0) {
                 cpu_reset(cpu);
                 char logstr[350];
@@ -520,6 +521,16 @@ void ejecutarProcesos(int32_t *quantum) {
                 memcpy(proceso->instmem, cpu->instmem, sizeof(proceso->instmem));
             }
         }
+
+        /* Lo que yo pienso es el código corregido
+        cpu_reset(cpu);
+        if (cpu_load_from_context(cpu, proceso->context) != 0) {
+            char logstr[350];
+            snprintf(logstr, sizeof(logstr), "Error al cargar el contexto del proceso %d\n", proceso->PID);
+            msg_log(LOG_LEVEL_ERROR, logstr);
+        } else {
+            msg_log(LOG_LEVEL_INFO, "Proceso restaurado desde contexto guardado.");
+        }*/
     }
     
     // Si hay proceso en ejecución, ejecutar instrucciones
@@ -783,7 +794,7 @@ void process_update() {
 
     // Mostrar el conteo de archivos únicos activos (ejecución + listos)
     mvwprintw(process, 1, 2, "Archivos únicos activos: %d   Usuarios activos: %d", unique_files, numUsers);
-    mvwprintw(process, 2, 2, "------------------------------------------------|PROCESADOR|-----------------------------------------------");
+    mvwprintw(process, 2, 2, "------------------------------------------------|EJECUCION|-----------------------------------------------");
 
     // Resto de la función permanece igual...
     if (ejecucion->inicio != NULL) {
@@ -811,7 +822,7 @@ void process_update() {
     }
 
 
-    mvwprintw(process, 4, 2, "--------------------------------------------------|LISTA|--------------------------------------------------");
+    mvwprintw(process, 4, 2, "--------------------------------------------------|LISTOS|--------------------------------------------------");
     actual = listos->inicio;
     int fila = 5; 
     while (actual != NULL) {
@@ -822,6 +833,8 @@ void process_update() {
         actual = actual->sig;
         fila++;
     }
+
+    //mvwprintw(process, 6, 2, "------------------------------------------------|NUEVOS|-----------------------------------------------");
 
     int fila_terminados = fila;
     clear_window_part(process, fila_terminados, 2, 18 - fila_terminados, 76);
@@ -865,7 +878,7 @@ os_get_curr_pid()
 struct PCB *
 os_get_proc(uint16_t pid)
 {
-    if (ejecucion)
+    if (ejecucion);
 }
 
 /**
@@ -887,6 +900,7 @@ main(void) {
 
     msg_init();
     process_init();
+    swap_init();
 
     struct prompt prompt;
     reg = newwin(7, 80, 10, 0);
@@ -963,6 +977,8 @@ main(void) {
     liberarLista(listos);
     liberarLista(ejecucion);
     liberarLista(terminados);
+
+    swap_close();
 
     endwin();
     return 0;
