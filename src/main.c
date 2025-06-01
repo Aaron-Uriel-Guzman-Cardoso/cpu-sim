@@ -15,6 +15,7 @@
 #include <assert.h>
 #include <os.h>
 #include <swap.h>
+#include <mmu.h>
 
 #include "../include/cpu.h"
 
@@ -58,7 +59,7 @@ enum prompt_status {
 struct os {
     uint32_t tms[MAX_AVAILABLE_FRAMES];
 };
-Lista *listos, *ejecucion, *terminados;
+Lista *listos, *ejecucion, *terminados, *nuevos;
 
 WINDOW *reg;
 WINDOW *process;
@@ -351,11 +352,17 @@ eval(struct cmd *cmd) {
 
                 // Crear un nuevo proceso y lo agrega a la lista
                 PCB *nuevo_proceso = listaCreaNodo((struct cpu_context) { 0 }, cmd->arg1, uid);
-                swap_load_program1(nuevo_proceso, cmd->arg1);
                 nuevo_proceso->P = PBase;
                 nuevo_proceso->KCPU = 0;
                 //nuevo_proceso->KCPUxU = 0;
-                if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
+
+                if(swap_load_program1(nuevo_proceso, cmd->arg1)){
+                    listaInsertarFinal(nuevos, nuevo_proceso);
+                    msg_log(LOG_LEVEL_INFO, "Proceso en espera de carga en SWAP.\n");
+                    //Se tiene que hacer process update?
+                }
+                else{
+                    if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
                     listaInsertarFinal(listos, nuevo_proceso);
                     user_new -> process_counter += 1;
                     msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
@@ -365,6 +372,7 @@ eval(struct cmd *cmd) {
                     if (nuevo_proceso != NULL) {
                         free(nuevo_proceso); 
                     }
+                }
                 }
             }
             else
@@ -487,13 +495,28 @@ void cargarProceso(Lista *listos, const char *fileName) {
  * \return No devuelve ningún valor (void).
  */
 void ejecutarProcesos(int32_t *quantum) {
+    // Intentar cargar procesos desde la lista 'nuevos' a la SWAP
+    if (nuevos->inicio != NULL) {
+        PCB *proceso_nuevo = listaExtraeInicio(nuevos);
+        if (swap_load_program1(proceso_nuevo, proceso_nuevo->fileName) == 0) {
+            // Proceso cargado correctamente, mover a `listos`
+            listaInsertarFinal(listos, proceso_nuevo);
+            msg_log(LOG_LEVEL_INFO, "Proceso movido de Nuevos a Listos.\n");
+            process_update();
+        } else {
+            // No se pudo cargar, devolver el proceso a `nuevos`
+            listaInsertarFinal(nuevos, proceso_nuevo);
+            msg_log(LOG_LEVEL_WARN, "No hay espacio en SWAP para el proceso. Permanece en Nuevos.\n");
+        }
+    }
+
     // Si no hay proceso en ejecución y hay procesos en listos, mover el proceso con menor prioridad a Ejecución
     if (ejecucion->inicio == NULL && listos->inicio != NULL) {
         PCB *proceso = listaExtraePrioridad(listos);
 
         listaInsertarFinal(ejecucion, proceso);
         *quantum = 0; // Reiniciar el quantum
-        /** TODO: modificar código para que trabaje de acuerdo a la forma nueva en que dejamos el programa en swap */
+
         // Verificar si el proceso ya tiene contexto previo (fue interrumpido por quantum)
         if (proceso->context.regs[REG_PC] > 1) {
             // El proceso ya se ejecutó antes - restaurar su contexto
@@ -505,128 +528,110 @@ void ejecutarProcesos(int32_t *quantum) {
             } else {
                 msg_log(LOG_LEVEL_INFO, "Proceso restaurado desde contexto guardado.");
             }
-        } else {
-            // Primera ejecución del proceso - cargar desde archivo
-            if (cpu_load_insts_from_file(cpu, proceso->fileName) != 0) {
-                cpu_reset(cpu);
-                char logstr[350];
-                snprintf(logstr, sizeof(logstr), "Error al cargar el archivo %s del proceso %d\n", 
-                         proceso->fileName, proceso->PID);
-                msg_log(LOG_LEVEL_ERROR, logstr);
-            } else {
-                // Guardar instrucciones en el PCB para futuras restauraciones
-                /*
-                 * TODO: no interactuar directamente con instmem, para evitar modificaciones accidentales
-                 */
-                memcpy(proceso->instmem, cpu->instmem, sizeof(proceso->instmem));
-            }
         }
-
-        /* Lo que yo pienso es el código corregido
-        cpu_reset(cpu);
-        if (cpu_load_from_context(cpu, proceso->context) != 0) {
-            char logstr[350];
-            snprintf(logstr, sizeof(logstr), "Error al cargar el contexto del proceso %d\n", proceso->PID);
-            msg_log(LOG_LEVEL_ERROR, logstr);
-        } else {
-            msg_log(LOG_LEVEL_INFO, "Proceso restaurado desde contexto guardado.");
-        }*/
     }
-    
+
     // Si hay proceso en ejecución, ejecutar instrucciones
     if (ejecucion->inicio != NULL) {
         PCB *proceso = ejecucion->inicio;
-        if (cpu_sync(cpu)) {
-            // Incrementar el quantum una vez por ciclo de CPU, no por cada evento
-            (*quantum)++;
-            
-            // Verificar si se superó el quantum antes de procesar eventos
-            if (*quantum >= MAX_QUANTUM) {
-                // Quantum expirado: guardar contexto y hacer cambio de proceso (Round-robin)
-                PCB *running = listaExtraeInicio(ejecucion);
-                if (running == NULL) {
+
+        // Obtener la instrucción actual desde la SWAP usando el MMU
+        struct inst current_inst = mmu_get_inst(proceso->context.regs[REG_PC]);
+
+        // Ejecutar la instrucción en la CPU
+        if (cpu_execute(cpu, &current_inst) == 0) {
+            proceso->context.regs[REG_PC]++; // Incrementar el PC
+        }
+
+        // Incrementar el quantum
+        (*quantum)++;
+
+        // Verificar si se superó el quantum
+        if (*quantum >= MAX_QUANTUM) {
+            // Quantum expirado: guardar contexto y mover el proceso de vuelta a listos
+            PCB *running = listaExtraeInicio(ejecucion);
+            if (running == NULL) {
+                msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
+                return;
+            }
+            running->context = cpu_dump_context(cpu);
+            running->KCPU += (*quantum) * IncCPU;
+
+            // Actualizar estadísticas del usuario
+            User *user = uc_get_user(uc, running->UID);
+            if (user) {
+                user->KCPUxU += (*quantum) * IncCPU;
+                update_user_stats(user->uid, user->KCPUxU);
+            }
+
+            listaInsertarFinal(listos, running);
+
+            // Recalcular prioridades de los procesos en la lista de listos
+            PCB *current_process = listos->inicio;
+            do {
+                current_process->KCPU /= 2;
+                User *user = uc_get_user(uc, current_process->UID);
+                if (user) {
+                    user->KCPUxU /= 2;
+                    current_process->P = PBase + current_process->KCPU / 2 + (user->KCPUxU / (4 * uc_get_weight(uc)));
+                }
+            } while ((current_process = current_process->sig));
+
+            *quantum = 0;
+            cpu_reset(cpu);
+            process_update();
+            return; // Salir para no procesar más eventos en este ciclo
+        }
+
+        // Manejar eventos generados por la CPU
+        enum cpu_event event;
+        while ((event = cpu_poll_event(cpu)) != CPU_NONE) {
+            if (event == CPU_HALT) {
+                // Proceso finalizado, moverlo a terminados
+                PCB *finished = listaExtraeInicio(ejecucion);
+                finished->KCPU += (*quantum) * IncCPU;
+
+                // Actualizar estadísticas del usuario
+                User *user = uc_get_user(uc, finished->UID);
+                if (user) {
+                    user->KCPUxU += (*quantum) * IncCPU;
+                    assert(user->process_counter != 0);
+                    user->process_counter -= 1;
+                    if (user->process_counter == 0) {
+                        update_user_stats(user->uid, user->KCPUxU);
+                        uc_dealloc_user(uc, user->uid);
+                    }
+                }
+
+                if (finished == NULL) {
                     msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
                     return;
                 }
-                running->context = cpu_dump_context(cpu);
-                running->KCPU += (*quantum) * IncCPU;
-                User *user = uc_get_user(uc, running->UID);
-                if (user) {
-                    user->KCPUxU += (*quantum) * IncCPU;
-                    update_user_stats(user->uid, user->KCPUxU);
-                }
-                listaInsertarFinal(listos, running);
+                finished->context = cpu_dump_context(cpu);
 
-                PCB *current_process = listos->inicio;
-                do {
-                    current_process->KCPU /= 2;
-                    User *user = uc_get_user(uc, current_process->UID);
-                    if (user) {
-                        user->KCPUxU /= 2;
-                        current_process->P = PBase + current_process->KCPU/2 + (user->KCPUxU/(4*uc_get_weight(uc)));
-                    }
-                } while ((current_process = current_process->sig));
+                listaInsertarFinal(terminados, finished);
                 *quantum = 0;
-
                 cpu_reset(cpu);
                 process_update();
-                //struct timespec pausa = { .tv_sec = 1, .tv_nsec = 0 }; // 1 segundo
-                //clock_nanosleep(CLOCK_MONOTONIC, 0, &pausa, NULL);
-                return; // Salir para no procesar más eventos en este ciclo
+                return; // Salir después de manejar el evento de terminación
             }
-            
-            // Procesar eventos generados por la CPU
-            enum cpu_event event;
-            while ((event = cpu_poll_event(cpu)) != CPU_NONE) {
-                if (event == CPU_HALT) {
-                    // Proceso finalizado, moverlo a terminados
-                    PCB *finished = listaExtraeInicio(ejecucion);
-                    finished->KCPU += (*quantum) * IncCPU;
-                    User *user = uc_get_user(uc, finished->UID);
-                    if (user) {
-                        user->KCPUxU += (*quantum) * IncCPU;
-                        /*
-                         * Nunca deberíamos de quitar procesos a un usuario,
-                         * que no tiene procesos. Si esto sucede es un error
-                         * lógico grave.
-                         */
-                        assert(user->process_counter != 0);
-                        user->process_counter -= 1;
-                        if (user->process_counter == 0) {
-                            update_user_stats(user->uid, user->KCPUxU);
-                            uc_dealloc_user(uc, user->uid);
-                        }
-                    }
-                    if (finished == NULL) {
-                        msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
-                        return;
-                    }
-                    finished->context = cpu_dump_context(cpu);
 
-                    listaInsertarFinal(terminados, finished);
-                    *quantum = 0;
-                    cpu_reset(cpu);
-                    process_update();
-                    return; // Salir después de manejar el evento de terminación
-                }
-                
-                // Impresión de otros eventos
-                if (event == CPU_INSTRUCTION_EXECUTED) {
-                    msg_log(LOG_LEVEL_INFO, "Instrucción ejecutada correctamente.\n");
-                } else if (event == CPU_INSTRUCTION_INVALID) {
-                    msg_log(LOG_LEVEL_ERROR, "Instrucción inválida.\n");
-                } else if (event == CPU_DIVISION_BY_ZERO) {
-                    char irstr[50];
-                    inst_to_str((struct inst *)&proceso->context.regs[REG_IR], irstr, sizeof(irstr));
-                    char logstr[200];
-                    snprintf(logstr, sizeof(logstr), "División por cero detectada: PID == %d, IR == %s, PC == %ld", 
-                             proceso->PID, irstr, proceso->context.regs[REG_PC]);
-                    msg_log(LOG_LEVEL_WARN, logstr);
-                } else if (event == CPU_REGISTER_OVERFLOW) {
-                    msg_log(LOG_LEVEL_WARN, "Desbordamiento de registro.\n");
-                } else {
-                    msg_log(LOG_LEVEL_INFO, "Evento no reconocido.\n");
-                }
+            // Manejo de otros eventos
+            if (event == CPU_INSTRUCTION_EXECUTED) {
+                msg_log(LOG_LEVEL_INFO, "Instrucción ejecutada correctamente.\n");
+            } else if (event == CPU_INSTRUCTION_INVALID) {
+                msg_log(LOG_LEVEL_ERROR, "Instrucción inválida.\n");
+            } else if (event == CPU_DIVISION_BY_ZERO) {
+                char irstr[50];
+                inst_to_str((struct inst *)&proceso->context.regs[REG_IR], irstr, sizeof(irstr));
+                char logstr[200];
+                snprintf(logstr, sizeof(logstr), "División por cero detectada: PID == %d, IR == %s, PC == %ld", 
+                         proceso->PID, irstr, proceso->context.regs[REG_PC]);
+                msg_log(LOG_LEVEL_WARN, logstr);
+            } else if (event == CPU_REGISTER_OVERFLOW) {
+                msg_log(LOG_LEVEL_WARN, "Desbordamiento de registro.\n");
+            } else {
+                msg_log(LOG_LEVEL_INFO, "Evento no reconocido.\n");
             }
         }
     }
@@ -720,6 +725,7 @@ process_init(void)
     listos = malloc(sizeof(*listos));
     ejecucion = malloc(sizeof(*ejecucion));
     terminados = malloc(sizeof(*terminados));
+    nuevos = malloc(sizeof(*nuevos));
     if (listos == NULL || ejecucion == NULL || terminados == NULL) {
         msg_log(LOG_LEVEL_ERROR, "Error al inicializar las listas de procesos.\n");
         return -1;
@@ -727,6 +733,7 @@ process_init(void)
     crearLista(listos);
     crearLista(ejecucion);
     crearLista(terminados);
+    crearLista(nuevos);
     process = newwin(42, 125, 0, 81);
     box(process, 0, 0);
     wrefresh(process);
