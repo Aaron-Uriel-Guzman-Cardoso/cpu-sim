@@ -21,7 +21,7 @@ typedef struct {
 void swap_init();
 void swap_close();
 int swap_allocate_frames(PCB *pcb);
-void swap_free_frames(int pid);
+void swap_free_frames(PCB *pcb);
 bool swap_load_program(PCB *pcb, const char *filename);
 int32_t swap_load_program1(PCB *pcb, const char *filename);
 struct inst swap_get(uint16_t frame, uint8_t offset);

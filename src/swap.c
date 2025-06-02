@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ncurses.h>
 #include <cpu.h>
+#include <os.h>
 
 // Archivo SWAP global
 static FILE *swapfile = NULL;
@@ -63,12 +64,22 @@ int swap_allocate_frames(PCB *pcb) {
 }
 
 // Liberar marcos de un proceso
-void swap_free_frames(int pid) {
-    for (int i = 0; i < MAX_FRAMES; i++) {
-        if (swap_map[i].pid == pid) {
-            swap_map[i].pid = -1;
+void swap_free_frames(PCB *pcb) {
+    /**
+     * TODO: Verificar y modificar el PID cuando el hermano original tenga que ser   
+     */
+    PCB *brother = os_find_brother(pcb);
+    if (brother) {
+        for (int i = 0; i < brother->tmp_size; i++) {
+            swap_map[i].pid = brother->PID;
         }
     }
+    else {
+        for (int i = 0; i < pcb->tmp_size; i++) {
+            swap_map[pcb->tmp[i]].pid = -1;
+        }
+    }
+    free(pcb->tmp);
 }
 
 /**
@@ -125,11 +136,18 @@ int count_instructions_in_file(FILE *file) {
  * 
  * \returns 0 si el programa se cargó correctamente, 1 si no hay suficientes
  *          marcos disponibles, -1 si el programa que se trata de cargar es
- *          más grande que la memoria swap.
+ *          más grande que la memoria swap, 2 si hay un proceso hermano.
  */
 int32_t
 swap_load_program1(PCB *pcb, const char *filename)
 {
+    PCB *brother;
+    if((brother = os_find_brother(pcb)) != NULL) {
+        pcb->tmp = malloc(brother->tmp_size * sizeof(*pcb->tmp));
+        memcpy(pcb->tmp, brother->tmp, brother->tmp_size * sizeof(*pcb->tmp));
+        pcb->tmp_size = brother->tmp_size;
+        return 2;
+    }
     FILE *program = fopen(filename, "r");
     if ((pcb->program_size = count_instructions_in_file(program)) >= SWAP_SIZE) {
         fclose(program);
@@ -210,24 +228,3 @@ int swap_get_free_frame_count() {
     return count;
 }
 
-bool has_brothers(PCB *pcb, Lista *listos, Lista *ejecucion) {
-    PCB *current = listos->inicio;
-    while (current) {
-        if (current != pcb && current->UID == pcb->UID && 
-            strcmp(current->fileName, pcb->fileName) == 0) {
-            return true;
-        }
-        current = current->sig;
-    }
-    
-    current = ejecucion->inicio;
-    while (current) {
-        if (current != pcb && current->UID == pcb->UID && 
-            strcmp(current->fileName, pcb->fileName) == 0) {
-            return true;
-        }
-        current = current->sig;
-    }
-    
-    return false;
-}

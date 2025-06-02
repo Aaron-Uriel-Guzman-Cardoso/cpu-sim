@@ -355,6 +355,7 @@ eval(struct cmd *cmd) {
                 nuevo_proceso->P = PBase;
                 nuevo_proceso->KCPU = 0;
                 //nuevo_proceso->KCPUxU = 0;
+                
 
                 switch(swap_load_program1(nuevo_proceso, cmd->arg1)) {
                 case 1:
@@ -365,6 +366,7 @@ eval(struct cmd *cmd) {
                     msg_log(LOG_LEVEL_ERROR, "Error: El programa es demasiado grande para la memoria SWAP.\n");
                     free(nuevo_proceso);
                     return 1;
+                    break;
                 case 0:
                     if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
                         listaInsertarFinal(listos, nuevo_proceso);
@@ -372,7 +374,14 @@ eval(struct cmd *cmd) {
                         msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
                         
                     }
+                    break;
+                case 2:
+                    listaInsertarFinal(listos, nuevo_proceso);
+                    msg_log(LOG_LEVEL_INFO, "Proceso hermano guardado.\n");
+                    break;
                 }
+                
+                    
                 process_update();
             }
             else
@@ -575,7 +584,7 @@ void ejecutarProcesos(int32_t *quantum) {
                 finished->context = cpu_dump_context(cpu);
 
                 listaInsertarFinal(terminados, finished);
-                swap_free_frames(finished->PID);
+                swap_free_frames(finished);
                 *quantum = 0;
                 cpu_reset(cpu);
                 process_update();
@@ -888,6 +897,29 @@ uint32_t
 os_get_curr_pid()
 {
     return (ejecucion && ejecucion->inicio)? ejecucion->inicio->PID : 0;
+}
+
+PCB *
+os_find_brother(PCB *pcb) {
+    PCB *current = listos->inicio;
+    while (current) {
+        if (current != pcb && current->UID == pcb->UID && 
+            strcmp(current->fileName, pcb->fileName) == 0) {
+            return current; // Retorna el primer hermano encontrado
+        }
+        current = current->sig;
+    }
+    
+    current = ejecucion->inicio;
+    while (current) {
+        if (current != pcb && current->UID == pcb->UID && 
+            strcmp(current->fileName, pcb->fileName) == 0) {
+            return current; // Retorna el primer hermano encontrado
+        }
+        current = current->sig;
+    }
+    
+    return NULL;
 }
 
 struct PCB *
