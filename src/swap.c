@@ -118,18 +118,28 @@ int count_instructions_in_file(FILE *file) {
     return count;
 }
 
-bool
+/**
+ * \brief Intenta cargar programa en la memoria swap
+ * 
+ * Esta función carga un programa desde un archivo de texto a la memoria swap
+ * 
+ * \returns 0 si el programa se cargó correctamente, 1 si no hay suficientes
+ *          marcos disponibles, -1 si el programa que se trata de cargar es
+ *          más grande que la memoria swap.
+ */
+int32_t
 swap_load_program1(PCB *pcb, const char *filename)
 {
     FILE *program = fopen(filename, "r");
-    int32_t num_lines = count_instructions_in_file(program);
+    if ((pcb->program_size = count_instructions_in_file(program)) >= SWAP_SIZE) {
+        fclose(program);
+        return -1; // El programa es demasiado grande para la memoria swap
+    }
     char buffer[33];
-
-    pcb->program_size = num_lines;
 
     if (swap_allocate_frames(pcb) < 0) {
         fclose(program);
-        return true; // No hay suficientes marcos disponibles
+        return 1; // No hay suficientes marcos disponibles
     }
 
     for (int i = 0; i < pcb->tmp_size; i++) {
@@ -144,7 +154,7 @@ swap_load_program1(PCB *pcb, const char *filename)
     }
     fclose(program);
     fflush(swapfile);
-    return false;
+    return 0;
 }
 
 /**

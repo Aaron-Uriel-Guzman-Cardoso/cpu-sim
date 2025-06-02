@@ -356,24 +356,24 @@ eval(struct cmd *cmd) {
                 nuevo_proceso->KCPU = 0;
                 //nuevo_proceso->KCPUxU = 0;
 
-                if(swap_load_program1(nuevo_proceso, cmd->arg1)){
+                switch(swap_load_program1(nuevo_proceso, cmd->arg1)) {
+                case 1:
                     listaInsertarFinal(nuevos, nuevo_proceso);
                     msg_log(LOG_LEVEL_INFO, "Proceso en espera de carga en SWAP.\n");
-                    //Se tiene que hacer process update?
-                }
-                else{
+                    break;
+                case -1:
+                    msg_log(LOG_LEVEL_ERROR, "Error: El programa es demasiado grande para la memoria SWAP.\n");
+                    free(nuevo_proceso);
+                    return 1;
+                case 0:
                     if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
-                    listaInsertarFinal(listos, nuevo_proceso);
-                    user_new -> process_counter += 1;
-                    msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
-                    process_update();
-                } else {
-                    msg_log(LOG_LEVEL_ERROR, "Error al crear el proceso.\n");
-                    if (nuevo_proceso != NULL) {
-                        free(nuevo_proceso); 
+                        listaInsertarFinal(listos, nuevo_proceso);
+                        user_new -> process_counter += 1;
+                        msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
+                        
                     }
                 }
-                }
+                process_update();
             }
             else
             {
@@ -547,7 +547,7 @@ void ejecutarProcesos(int32_t *quantum) {
         if (!cpu_sync(cpu)) {
             return;
         }
-        
+
         // Manejar eventos generados por la CPU
         enum cpu_event event;
         while ((event = cpu_poll_event(cpu)) != CPU_NONE) {
