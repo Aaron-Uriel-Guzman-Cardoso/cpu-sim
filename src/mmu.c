@@ -15,7 +15,8 @@ struct inst mmu_get_inst(uint16_t addr);
  * \param addr Dirección virtual de la siguiente instrucción
  *             (usalmente el registro PC) 
  * \return La instrucción encontrada en la dirección física calculada,
- *         MOV AX 0 si está inicializado en ceros.
+ *         END en caso de llegar al final del programa o ingresar una
+ *         dirección inválida.
  */
 struct inst
 mmu_get_inst(uint16_t addr)
@@ -25,6 +26,16 @@ mmu_get_inst(uint16_t addr)
     const struct PCB *curr_proc = os_get_proc(pid);
     const uint16_t relative_target_frame = addr / FRAME_SIZE;
     const uint16_t offset = addr % FRAME_SIZE;
+    /* 
+     * Verificamos que la dirección a acceder está entre las permitidas para el
+     * proceso, en caso de salirnos, regresamos END.
+     */
+    if (relative_target_frame >= curr_proc->tmp_size ||
+        (relative_target_frame == (curr_proc->tmp_size - 1) &&
+         curr_proc->program_size % FRAME_SIZE < offset))
+    {
+        return (struct inst) { .op = OP_END, .ra = REG_AX, .imm = 0 };
+    }
     const uint16_t abs_target_frame = curr_proc->tmp[relative_target_frame];
     return swap_get(abs_target_frame, offset);
 };

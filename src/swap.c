@@ -25,7 +25,6 @@ void swap_init() {
     // Inicializar TMS
     for (int i = 0; i < MAX_FRAMES; i++) {
         swap_map[i].pid = -1;
-        swap_map[i].referenced = 0;
     }
 }
 
@@ -68,7 +67,6 @@ void swap_free_frames(int pid) {
     for (int i = 0; i < MAX_FRAMES; i++) {
         if (swap_map[i].pid == pid) {
             swap_map[i].pid = -1;
-            swap_map[i].referenced = 0;
         }
     }
 }
@@ -116,6 +114,7 @@ int count_instructions_in_file(FILE *file) {
         if (*ptr == '\n' || *ptr == '\0') continue;
         count++;
     }
+    rewind(file); // Volver al inicio del archivo
     return count;
 }
 
@@ -134,7 +133,7 @@ swap_load_program1(PCB *pcb, const char *filename)
     }
 
     for (int i = 0; i < pcb->tmp_size; i++) {
-        for (int j = 0; j < FRAME_SIZE; j++) {
+        for (int j = 0; j < FRAME_SIZE && j < pcb->program_size; j++) {
             if (fgets(buffer, 33, program)) {
                 struct inst *inst = inst_from_str(buffer);
                 long real_addr = (pcb->tmp[i] * FRAME_SIZE + j) * INSTR_SIZE;

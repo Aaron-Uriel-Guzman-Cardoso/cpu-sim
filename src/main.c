@@ -513,6 +513,7 @@ void ejecutarProcesos(int32_t *quantum) {
     // Si no hay proceso en ejecución y hay procesos en listos, mover el proceso con menor prioridad a Ejecución
     if (ejecucion->inicio == NULL && listos->inicio != NULL) {
         PCB *proceso = listaExtraePrioridad(listos);
+        
 
         listaInsertarFinal(ejecucion, proceso);
         *quantum = 0; // Reiniciar el quantum
@@ -529,21 +530,78 @@ void ejecutarProcesos(int32_t *quantum) {
                 msg_log(LOG_LEVEL_INFO, "Proceso restaurado desde contexto guardado.");
             }
         }
+        cpu_enable(cpu); /* Habilitamos CPU para ejecutar instrucciones, ya
+                            estando lista. */
     }
 
-    // Si hay proceso en ejecución, ejecutar instrucciones
+    /*
+     * Si hay proceso en ejecución, intentar ejecutar instrucciones.
+     */
     if (ejecucion->inicio != NULL) {
         PCB *proceso = ejecucion->inicio;
 
-        // Obtener la instrucción actual desde la SWAP usando el MMU
-        struct inst current_inst = mmu_get_inst(proceso->context.regs[REG_PC]);
+        /* 
+         * Cuando la CPU no ejecutó ninguna instrucción desde la última vez
+         * que consultamos, no tenemos nada que hacer.
+         */
+        if (!cpu_sync(cpu)) {
+            return;
+        }
+        
+        // Manejar eventos generados por la CPU
+        enum cpu_event event;
+        while ((event = cpu_poll_event(cpu)) != CPU_NONE) {
+            if (event == CPU_HALT) {
+                // Proceso finalizado, moverlo a terminados
+                PCB *finished = listaExtraeInicio(ejecucion);
+                finished->KCPU += (*quantum) * IncCPU;
 
-        // Ejecutar la instrucción en la CPU
-        if (cpu_execute(cpu, &current_inst) == 0) {
-            proceso->context.regs[REG_PC]++; // Incrementar el PC
+                // Actualizar estadísticas del usuario
+                User *user = uc_get_user(uc, finished->UID);
+                if (user) {
+                    user->KCPUxU += (*quantum) * IncCPU;
+                    assert(user->process_counter != 0);
+                    user->process_counter -= 1;
+                    if (user->process_counter == 0) {
+                        update_user_stats(user->uid, user->KCPUxU);
+                        uc_dealloc_user(uc, user->uid);
+                    }
+                }
+
+                if (finished == NULL) {
+                    msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
+                    return;
+                }
+                finished->context = cpu_dump_context(cpu);
+
+                listaInsertarFinal(terminados, finished);
+                swap_free_frames(finished->PID);
+                *quantum = 0;
+                cpu_reset(cpu);
+                process_update();
+                return; // Salir después de manejar el evento de terminación
+            }
+
+            // Manejo de otros eventos
+            if (event == CPU_INSTRUCTION_EXECUTED) {
+                msg_log(LOG_LEVEL_INFO, "Instrucción ejecutada correctamente.\n");
+            } else if (event == CPU_INSTRUCTION_INVALID) {
+                msg_log(LOG_LEVEL_ERROR, "Instrucción inválida.\n");
+            } else if (event == CPU_DIVISION_BY_ZERO) {
+                char irstr[50];
+                inst_to_str((struct inst *)&proceso->context.regs[REG_IR], irstr, sizeof(irstr));
+                char logstr[200];
+                snprintf(logstr, sizeof(logstr), "División por cero detectada: PID == %d, IR == %s, PC == %ld", 
+                         proceso->PID, irstr, proceso->context.regs[REG_PC]);
+                msg_log(LOG_LEVEL_WARN, logstr);
+            } else if (event == CPU_REGISTER_OVERFLOW) {
+                msg_log(LOG_LEVEL_WARN, "Desbordamiento de registro.\n");
+            } else {
+                msg_log(LOG_LEVEL_INFO, "Evento no reconocido.\n");
+            }
         }
 
-        // Incrementar el quantum
+        // Incrementar el quantum porque se ejecutó una instrucción
         (*quantum)++;
 
         // Verificar si se superó el quantum
@@ -583,57 +641,7 @@ void ejecutarProcesos(int32_t *quantum) {
             return; // Salir para no procesar más eventos en este ciclo
         }
 
-        // Manejar eventos generados por la CPU
-        enum cpu_event event;
-        while ((event = cpu_poll_event(cpu)) != CPU_NONE) {
-            if (event == CPU_HALT) {
-                // Proceso finalizado, moverlo a terminados
-                PCB *finished = listaExtraeInicio(ejecucion);
-                finished->KCPU += (*quantum) * IncCPU;
-
-                // Actualizar estadísticas del usuario
-                User *user = uc_get_user(uc, finished->UID);
-                if (user) {
-                    user->KCPUxU += (*quantum) * IncCPU;
-                    assert(user->process_counter != 0);
-                    user->process_counter -= 1;
-                    if (user->process_counter == 0) {
-                        update_user_stats(user->uid, user->KCPUxU);
-                        uc_dealloc_user(uc, user->uid);
-                    }
-                }
-
-                if (finished == NULL) {
-                    msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
-                    return;
-                }
-                finished->context = cpu_dump_context(cpu);
-
-                listaInsertarFinal(terminados, finished);
-                *quantum = 0;
-                cpu_reset(cpu);
-                process_update();
-                return; // Salir después de manejar el evento de terminación
-            }
-
-            // Manejo de otros eventos
-            if (event == CPU_INSTRUCTION_EXECUTED) {
-                msg_log(LOG_LEVEL_INFO, "Instrucción ejecutada correctamente.\n");
-            } else if (event == CPU_INSTRUCTION_INVALID) {
-                msg_log(LOG_LEVEL_ERROR, "Instrucción inválida.\n");
-            } else if (event == CPU_DIVISION_BY_ZERO) {
-                char irstr[50];
-                inst_to_str((struct inst *)&proceso->context.regs[REG_IR], irstr, sizeof(irstr));
-                char logstr[200];
-                snprintf(logstr, sizeof(logstr), "División por cero detectada: PID == %d, IR == %s, PC == %ld", 
-                         proceso->PID, irstr, proceso->context.regs[REG_PC]);
-                msg_log(LOG_LEVEL_WARN, logstr);
-            } else if (event == CPU_REGISTER_OVERFLOW) {
-                msg_log(LOG_LEVEL_WARN, "Desbordamiento de registro.\n");
-            } else {
-                msg_log(LOG_LEVEL_INFO, "Evento no reconocido.\n");
-            }
-        }
+        
     }
 }
 
@@ -885,7 +893,19 @@ os_get_curr_pid()
 struct PCB *
 os_get_proc(uint16_t pid)
 {
-    if (ejecucion);
+    if (pid == 0) {
+        return NULL; // No hay proceso con PID 0
+    }
+    PCB *proceso = listaBuscarPID(listos, pid);
+    if (proceso) {
+        return proceso;
+    }
+
+    proceso = listaBuscarPID(ejecucion, pid);
+    if (proceso) {
+        return proceso;
+    }
+    return NULL; // No se encontró el proceso
 }
 
 /**

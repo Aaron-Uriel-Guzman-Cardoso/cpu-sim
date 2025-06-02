@@ -15,7 +15,6 @@
 // Entrada en la Tabla de Mapa de Swap (TMS)
 typedef struct {
     int pid;                  // PID del proceso dueño (-1 si libre)
-    int referenced;           // Para algoritmos de reemplazo
 } FrameEntry;
 
 // Prototipos de funciones

@@ -638,6 +638,16 @@ cpu_next_cycle(struct cpu *self)
     if (self->halt) {
         return CPU_NONE;
     }
+    if (!self->halt) {
+        /**
+         * Cargamos la siguiente instrucción a ejecutar en el IR y movemos el
+         * PC a la siguiente siguiente instrucción.
+         */
+        memset(&self->regs[REG_IR], 0, sizeof(self->regs[REG_IR]));
+        struct inst inst = mmu_get_inst(self->regs[REG_PC]);
+        memcpy(&self->regs[REG_IR], &inst, sizeof(inst));
+        self->regs[REG_PC] += 1;
+    }
     /* Cargamos la instrucción de IR para su ejecución */
     struct inst *inst = (struct inst *)&self->regs[REG_IR];
     if (inst) {
@@ -657,27 +667,7 @@ cpu_next_cycle(struct cpu *self)
     } else {
         ocurred_event = CPU_INSTRUCTION_INVALID;
     }
-    if ((self->regs[REG_PC] - 1) < INSTS_MAX && !self->halt) {
-        /**
-         * Cargamos la siguiente instrucción a ejecutar en el IR y movemos el
-         * PC a la siguiente siguiente instrucción.
-         */
-        memset(&self->regs[REG_IR], 0, sizeof(self->regs[REG_IR]));
-        struct inst inst = mmu_get_inst(self->regs[REG_PC]);
-        memcpy(&self->regs[REG_IR], &inst, sizeof(inst));
-        self->regs[REG_PC] += 1;
-    } else {
-        /**
-         * Si nos pasamos del final de la memoria, el siguiente ciclo
-         * ejecutará un END.
-         */
-        struct inst end = {
-            .op = OP_END,
-            .ra = REG_AX,
-            .imm = 0
-        };
-        memcpy(&self->regs[REG_IR], &end, sizeof(end));
-    }
+    
     return ocurred_event;
 }
 
@@ -816,7 +806,6 @@ cpu_load_from_context(struct cpu *self, struct cpu_context context)
         return -1;
     }
     memcpy(self->regs, context.regs, sizeof(self->regs));
-    self->halt = false;
     self->div_by_zero = false;
     self->overflow = false;
     
@@ -825,4 +814,35 @@ cpu_load_from_context(struct cpu *self, struct cpu_context context)
     while (cpu_poll_event(self) != CPU_NONE) {}
     
     return 0;
+}
+
+/**
+ * \brief Habilita la CPU para que pueda ejecutar instrucciones.
+ * 
+ * Es requerido llamar esta función para que la CPU comience a ejecutar
+ * instrucciones.
+ * \param self La CPU a habilitar
+ */
+void
+cpu_enable(struct cpu *self)
+{
+    if (self) {
+        self->halt = false;
+    }
+}
+
+/**
+ * \brief Deshabilita la CPU para que no ejecute más instrucciones.
+ * 
+ * Esta función es útil para detener la ejecución de la CPU,
+ * cuando no hay más instrucciones que ejecutar. Esto usualmente lo decide el
+ * sistema operativo cuando ya no hay procesos.
+ * \param self La CPU a deshabilitar
+ */
+void
+cpu_disable(struct cpu *self)
+{
+    if (self) {
+        self->halt = true;
+    }
 }
