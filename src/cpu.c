@@ -12,6 +12,8 @@
 #include <insts.h>
 #include <time.h>
 #include <queue.h>
+#include <mmu.h>
+#include <swap.h>
 
 
 /**
@@ -402,7 +404,6 @@ cpu_new(void)
 int32_t
 cpu_reset(struct cpu *self)
 {
-    memset(self->instmem, 0, sizeof(self->instmem));
     memset(self->regs, 0, sizeof(self->regs));
     self->halt = true;
     self->div_by_zero = false;
@@ -417,7 +418,7 @@ cpu_reset(struct cpu *self)
  * genérico para cpu_load_insts_from_file() y cpu_load_insts_from_str()
  * \return 0 si todo bien, 1 si hay error en la instrucción, 2 si es END
  * 
- */
+
 static int32_t 
 cpu_parse_and_load_inst(struct cpu *self, const char *inst_str, 
                               size_t *instmem_end)
@@ -433,7 +434,7 @@ cpu_parse_and_load_inst(struct cpu *self, const char *inst_str,
          * TODO: imprimir de forma genérica desde la CPU para compatibilidad
          *       con front-end de ncurses y para diagnóstico en las pruebas
          *       unitarias.
-         */
+         /
         snprintf(logstr, sizeof(logstr),
                  "Instrucción \"%s\" inválida, remplazada por END\n", inst_str);
         msg_log(LOG_LEVEL_WARN, logstr);
@@ -455,6 +456,7 @@ cpu_parse_and_load_inst(struct cpu *self, const char *inst_str,
     
     return (is_end)? 2 : 0;
 }
+*/
 
 /**
  * \brief Realiza preparaciones finales en la CPU para su ejecución
@@ -475,14 +477,15 @@ cpu_prepare(struct cpu *self)
      *        estructura inst está hecha de forma que ocupe menos de 64 bits,
      *        verificamos por si acaso que esta quepa sin problemas
      */
-    assert(sizeof(self->instmem[0]) <= sizeof(self->regs[REG_IR]));
-    
+    //assert(sizeof(self->instmem[0]) <= sizeof(self->regs[REG_IR]));
+
     /**
      * Cargamos primer instrucción y actualizamos PC para que apunte a
      * siguiente instrucción.
      */
     memset(&self->regs[REG_IR], 0, sizeof(self->regs[REG_IR]));
-    memcpy(&self->regs[REG_IR], &self->instmem[0], sizeof(self->instmem[0]));
+    struct inst inst = mmu_get_inst(0);
+    memcpy(&self->regs[REG_IR], &inst, sizeof(inst));
     self->regs[REG_PC] = 1;
 
     /**
@@ -510,7 +513,7 @@ cpu_prepare(struct cpu *self)
  * \return Si hubo error al cargar las instrucciones desde el archivo:
  *         0 no hubo error, 1 hubo error al leer una instrucción del archivo, 
  *         2 se llenó la memoria de instrucciones.
- */
+ *
 int32_t
 cpu_load_insts_from_file(struct cpu *self, const char *filename)
 {
@@ -526,7 +529,7 @@ cpu_load_insts_from_file(struct cpu *self, const char *filename)
         if (instmem_end > INSTS_MAX) {
             /*
              * Nos pasamos del límite de instrucciones :(
-             */
+             *
             return 2;
         }
         for (size_t i = 0; buf[i] != '\0'; i += 1) {
@@ -542,12 +545,13 @@ cpu_load_insts_from_file(struct cpu *self, const char *filename)
     cpu_prepare(self);
     return 0;
 }
+    */
 
 /**
  * \brief Carga un string de instrucciones para ser ejecutada por la CPU.
  * \warning La cadena recibida será modificada internamente para su manejo,
  *          esta no puede ser una cadena literal sino un arreglo.
- */
+ *
 int32_t
 cpu_load_insts_from_str(struct cpu *self, char *str)
 {
@@ -561,12 +565,12 @@ cpu_load_insts_from_str(struct cpu *self, char *str)
      * El motivo por el que la cadena pasada tiene que ser modificable es
      * debido al uso de strtok_r(), que modifica la cadena original. Modificar
      * una cadena de solo lectura lleva a comportamiento indefinido.
-     */
+     *
     char *whole_inst_tok = strtok_r(str, "\n", &str_state);
     if (!whole_inst_tok) {
         /*
          * Formato inválido de programa de instrucciones
-         */
+         *
         return 2;
     }
     int32_t result = cpu_parse_and_load_inst(self, whole_inst_tok, &instmem_end);
@@ -587,6 +591,7 @@ cpu_load_insts_from_str(struct cpu *self, char *str)
     cpu_prepare(self);
     return 0;
 }
+*/
 
 /**
  * \brief Ejecuta una instrucción en la CPU.
@@ -633,6 +638,16 @@ cpu_next_cycle(struct cpu *self)
     if (self->halt) {
         return CPU_NONE;
     }
+    if (!self->halt) {
+        /**
+         * Cargamos la siguiente instrucción a ejecutar en el IR y movemos el
+         * PC a la siguiente siguiente instrucción.
+         */
+        memset(&self->regs[REG_IR], 0, sizeof(self->regs[REG_IR]));
+        struct inst inst = mmu_get_inst(self->regs[REG_PC]);
+        memcpy(&self->regs[REG_IR], &inst, sizeof(inst));
+        self->regs[REG_PC] += 1;
+    }
     /* Cargamos la instrucción de IR para su ejecución */
     struct inst *inst = (struct inst *)&self->regs[REG_IR];
     if (inst) {
@@ -652,27 +667,7 @@ cpu_next_cycle(struct cpu *self)
     } else {
         ocurred_event = CPU_INSTRUCTION_INVALID;
     }
-    if ((self->regs[REG_PC] - 1) < INSTS_MAX && !self->halt) {
-        /**
-         * Cargamos la siguiente instrucción a ejecutar en el IR y movemos el
-         * PC a la siguiente siguiente instrucción.
-         */
-        memset(&self->regs[REG_IR], 0, sizeof(self->regs[REG_IR]));
-        memcpy(&self->regs[REG_IR], &self->instmem[self->regs[REG_PC]],
-               sizeof(self->instmem[self->regs[REG_PC]]));
-        self->regs[REG_PC] += 1;
-    } else {
-        /**
-         * Si nos pasamos del final de la memoria, el siguiente ciclo
-         * ejecutará un END.
-         */
-        struct inst end = {
-            .op = OP_END,
-            .ra = REG_AX,
-            .imm = 0
-        };
-        memcpy(&self->regs[REG_IR], &end, sizeof(end));
-    }
+    
     return ocurred_event;
 }
 
@@ -805,15 +800,12 @@ cpu_dump_context(struct cpu *self)
  * \return 0 si fue exitoso, < 0 en caso de error
  */
 int32_t
-cpu_load_from_context(struct cpu *self, struct cpu_context context, struct inst instmem[INSTS_MAX])
+cpu_load_from_context(struct cpu *self, struct cpu_context context)
 {
     if (!self) {
         return -1;
     }
     memcpy(self->regs, context.regs, sizeof(self->regs));
-    memcpy(self->instmem, instmem, sizeof(self->instmem));
-    
-    self->halt = false;
     self->div_by_zero = false;
     self->overflow = false;
     
@@ -822,4 +814,35 @@ cpu_load_from_context(struct cpu *self, struct cpu_context context, struct inst 
     while (cpu_poll_event(self) != CPU_NONE) {}
     
     return 0;
+}
+
+/**
+ * \brief Habilita la CPU para que pueda ejecutar instrucciones.
+ * 
+ * Es requerido llamar esta función para que la CPU comience a ejecutar
+ * instrucciones.
+ * \param self La CPU a habilitar
+ */
+void
+cpu_enable(struct cpu *self)
+{
+    if (self) {
+        self->halt = false;
+    }
+}
+
+/**
+ * \brief Deshabilita la CPU para que no ejecute más instrucciones.
+ * 
+ * Esta función es útil para detener la ejecución de la CPU,
+ * cuando no hay más instrucciones que ejecutar. Esto usualmente lo decide el
+ * sistema operativo cuando ya no hay procesos.
+ * \param self La CPU a deshabilitar
+ */
+void
+cpu_disable(struct cpu *self)
+{
+    if (self) {
+        self->halt = true;
+    }
 }

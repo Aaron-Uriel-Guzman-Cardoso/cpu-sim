@@ -45,6 +45,11 @@ PCB
             nuevo_nodo->UID = uid;
             nuevo_nodo->P = 0; // Inicializar P a 0
             nuevo_nodo->KCPU = 0.0; // Inicializar KCPU a 0.0
+            nuevo_nodo->tmp = NULL; // Inicializar TMP como NULL
+            nuevo_nodo->tmp_size = 0; // Inicializar tamaño de TMP a 0
+            nuevo_nodo->program_size = 0; // Inicializar tamaño del programa a 0
+            /* Esperemos que inicialize todo en -1*/
+            
         } else {
             // Si el archivo no se puede abrir, liberar el nodo y retornar NULL
             free(nuevo_nodo);

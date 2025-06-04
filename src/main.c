@@ -13,7 +13,9 @@
 #include <insts.h>
 #include <lista.h>
 #include <assert.h>
+#include <os.h>
 #include <swap.h>
+#include <mmu.h>
 
 #include "../include/cpu.h"
 
@@ -25,6 +27,18 @@
 UserStats user_stats[MAX_USER_STATS];
 int user_stats_count = 0;
 
+#define TOTAL_MARCOS 4096  // Desde 000 hasta FFF
+#define MARCOS_VISIBLES 16 // Marcos visibles a la vez
+
+// Variables para controlar el scroll
+WINDOW *tms_win;
+uint32_t tms_frames[TOTAL_MARCOS] = {0};
+int tms_scroll_offset = 0;
+
+void tms_init();
+void tms_update();
+void tms_assign_frame(int frame_num, int pid);
+void tms_free_frame(int frame_num);
 
 struct cmd {
     char name[MAX_CMD_CHARS];
@@ -53,7 +67,11 @@ enum prompt_status {
     PROMPT_STATUS_INSTRUCTION_DECODED
 };
 
-Lista *listos, *ejecucion, *terminados;
+
+struct os {
+    uint32_t tms[MAX_AVAILABLE_FRAMES];
+};
+Lista *listos, *ejecucion, *terminados, *nuevos;
 
 WINDOW *reg;
 WINDOW *process;
@@ -183,6 +201,7 @@ prompt_update(struct prompt *prompt)
     static int32_t buflen = 0;
     int c;
     enum prompt_status status = PROMPT_STATUS_OK;
+    
     if ((c = wgetch(prompt->win)) != -1) {
         if (c == '\n') { 
             clear_window_part(prompt->win, 1, 1, 5, 78);
@@ -204,7 +223,16 @@ prompt_update(struct prompt *prompt)
                 buf[buflen - 1] = 0;
                 buflen -= 1;
             }
-        } else if (c == KEY_UP) {
+        } else if (c == KEY_F(5)) {
+            strncpy(buf, "F5", sizeof(buf));
+            buflen = 2;
+            return PROMPT_STATUS_INSTRUCTION_DECODED;
+        } else if (c == KEY_F(6)) {
+            strncpy(buf, "F6", sizeof(buf));
+            buflen = 2;
+            return PROMPT_STATUS_INSTRUCTION_DECODED;
+
+        }else if (c == KEY_UP) {
             if (prompt->hist.size > 0) {
                 prompt->hist_index = (prompt->hist_index - 1 + HISTORY_SIZE) % HISTORY_SIZE;
                 snprintf(buf, sizeof(buf), "%s %s %s", prompt->hist.history[prompt->hist_index].name, prompt->hist.history[prompt->hist_index].arg1, prompt->hist.history[prompt->hist_index].arg2);
@@ -293,7 +321,26 @@ struct user_control *uc;
 
 int32_t 
 eval(struct cmd *cmd) { 
-    if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
+
+    // Scrroll en el TMS
+    if (strncmp(cmd->name, "F5", 2) == 0) {
+        // Bajar en el TMS 
+        if (tms_scroll_offset + MARCOS_VISIBLES < TOTAL_MARCOS) {
+            tms_scroll_offset += MARCOS_VISIBLES;
+            tms_update();
+        }
+        return 0;
+    } 
+    else if (strncmp(cmd->name, "F6", 2) == 0) {
+        // Subir en el TMS
+        if (tms_scroll_offset - MARCOS_VISIBLES >= 0) {
+            tms_scroll_offset -= MARCOS_VISIBLES;
+            tms_update();
+        }
+        return 0;
+    }
+
+    else if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
         liberarLista(listos);
         liberarLista(ejecucion);
         liberarLista(terminados);
@@ -303,6 +350,7 @@ eval(struct cmd *cmd) {
         swap_close();
         exit(0);
     } 
+    
     else if (strncmp(cmd->name, "LOAD", 4) == 0) {
         if (cmd->arg1[0] == '\0') {
             msg_log(LOG_LEVEL_ERROR, "Falta el nombre del archivo\n");
@@ -350,17 +398,34 @@ eval(struct cmd *cmd) {
                 nuevo_proceso->P = PBase;
                 nuevo_proceso->KCPU = 0;
                 //nuevo_proceso->KCPUxU = 0;
-                if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
-                    listaInsertarFinal(listos, nuevo_proceso);
-                    user_new -> process_counter += 1;
-                    msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
-                    process_update();
-                } else {
-                    msg_log(LOG_LEVEL_ERROR, "Error al crear el proceso.\n");
-                    if (nuevo_proceso != NULL) {
-                        free(nuevo_proceso); 
+                
+
+                switch(swap_load_program1(nuevo_proceso, cmd->arg1)) {
+                case 1:
+                    listaInsertarFinal(nuevos, nuevo_proceso);
+                    msg_log(LOG_LEVEL_INFO, "Proceso en espera de carga en SWAP.\n");
+                    break;
+                case -1:
+                    msg_log(LOG_LEVEL_ERROR, "Error: El programa es demasiado grande para la memoria SWAP.\n");
+                    free(nuevo_proceso);
+                    return 1;
+                    break;
+                case 0:
+                    if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
+                        listaInsertarFinal(listos, nuevo_proceso);
+                        user_new -> process_counter += 1;
+                        msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
+                        
                     }
+                    break;
+                case 2:
+                    listaInsertarFinal(listos, nuevo_proceso);
+                    msg_log(LOG_LEVEL_INFO, "Proceso hermano guardado.\n");
+                    break;
                 }
+                
+                    
+                process_update();
             }
             else
             {
@@ -445,7 +510,7 @@ eval(struct cmd *cmd) {
  * \param fileName Nombre del archivo que representa el programa asociado al proceso.
  *
  * \return No devuelve ningún valor (void).
- */
+ 
 void cargarProceso(Lista *listos, const char *fileName) {
     uint8_t uid = 0;
     PCB *proceso = listaCreaNodo((struct cpu_context) {0}, fileName, uid);
@@ -467,7 +532,7 @@ void cargarProceso(Lista *listos, const char *fileName) {
             free(proceso);
         }
     }
-}
+}*/
 
 /**
  * \brief Ejecuta los procesos en la lista de ejecución y maneja los eventos de la CPU.
@@ -482,138 +547,257 @@ void cargarProceso(Lista *listos, const char *fileName) {
  * \return No devuelve ningún valor (void).
  */
 void ejecutarProcesos(int32_t *quantum) {
+    // Intentar cargar procesos desde la lista 'nuevos' a la SWAP
+    if (nuevos->inicio != NULL) {
+        PCB *proceso_nuevo = listaExtraeInicio(nuevos);
+        if (swap_load_program1(proceso_nuevo, proceso_nuevo->fileName) == 0) {
+            // Proceso cargado correctamente, mover a `listos`
+            listaInsertarFinal(listos, proceso_nuevo);
+            msg_log(LOG_LEVEL_INFO, "Proceso movido de Nuevos a Listos.\n");
+            process_update();
+        } else {
+            // No se pudo cargar, devolver el proceso a `nuevos`
+            listaInsertarFinal(nuevos, proceso_nuevo);
+            msg_log(LOG_LEVEL_WARN, "No hay espacio en SWAP para el proceso. Permanece en Nuevos.\n");
+        }
+    }
+
     // Si no hay proceso en ejecución y hay procesos en listos, mover el proceso con menor prioridad a Ejecución
     if (ejecucion->inicio == NULL && listos->inicio != NULL) {
         PCB *proceso = listaExtraePrioridad(listos);
+        
 
         listaInsertarFinal(ejecucion, proceso);
         *quantum = 0; // Reiniciar el quantum
-        
+
         // Verificar si el proceso ya tiene contexto previo (fue interrumpido por quantum)
         if (proceso->context.regs[REG_PC] > 1) {
             // El proceso ya se ejecutó antes - restaurar su contexto
             cpu_reset(cpu);
-            if (cpu_load_from_context(cpu, proceso->context, proceso->instmem) != 0) {
+            if (cpu_load_from_context(cpu, proceso->context) != 0) {
                 char logstr[350];
                 snprintf(logstr, sizeof(logstr), "Error al cargar el contexto del proceso %d\n", proceso->PID);
                 msg_log(LOG_LEVEL_ERROR, logstr);
             } else {
                 msg_log(LOG_LEVEL_INFO, "Proceso restaurado desde contexto guardado.");
             }
-        } else {
-            // Primera ejecución del proceso - cargar desde archivo
-            cpu_reset(cpu);
-            if (cpu_load_insts_from_file(cpu, proceso->fileName) != 0) {
-                cpu_reset(cpu);
-                char logstr[350];
-                snprintf(logstr, sizeof(logstr), "Error al cargar el archivo %s del proceso %d\n", 
-                         proceso->fileName, proceso->PID);
-                msg_log(LOG_LEVEL_ERROR, logstr);
-            } else {
-                // Guardar instrucciones en el PCB para futuras restauraciones
-                /*
-                 * TODO: no interactuar directamente con instmem, para evitar modificaciones accidentales
-                 */
-                memcpy(proceso->instmem, cpu->instmem, sizeof(proceso->instmem));
-            }
         }
+        cpu_enable(cpu); /* Habilitamos CPU para ejecutar instrucciones, ya
+                            estando lista. */
     }
-    
-    // Si hay proceso en ejecución, ejecutar instrucciones
+
+    /*
+     * Si hay proceso en ejecución, intentar ejecutar instrucciones.
+     */
     if (ejecucion->inicio != NULL) {
         PCB *proceso = ejecucion->inicio;
-        if (cpu_sync(cpu)) {
-            // Incrementar el quantum una vez por ciclo de CPU, no por cada evento
-            (*quantum)++;
-            
-            // Verificar si se superó el quantum antes de procesar eventos
-            if (*quantum >= MAX_QUANTUM) {
-                // Quantum expirado: guardar contexto y hacer cambio de proceso (Round-robin)
-                PCB *running = listaExtraeInicio(ejecucion);
-                if (running == NULL) {
+
+        /* 
+         * Cuando la CPU no ejecutó ninguna instrucción desde la última vez
+         * que consultamos, no tenemos nada que hacer.
+         */
+        if (!cpu_sync(cpu)) {
+            return;
+        }
+
+        // Manejar eventos generados por la CPU
+        enum cpu_event event;
+        while ((event = cpu_poll_event(cpu)) != CPU_NONE) {
+            if (event == CPU_HALT) {
+                // Proceso finalizado, moverlo a terminados
+                PCB *finished = listaExtraeInicio(ejecucion);
+                finished->KCPU += (*quantum) * IncCPU;
+
+                // Actualizar estadísticas del usuario
+                User *user = uc_get_user(uc, finished->UID);
+                if (user) {
+                    user->KCPUxU += (*quantum) * IncCPU;
+                    assert(user->process_counter != 0);
+                    user->process_counter -= 1;
+                    if (user->process_counter == 0) {
+                        update_user_stats(user->uid, user->KCPUxU);
+                        uc_dealloc_user(uc, user->uid);
+                    }
+                }
+
+                if (finished == NULL) {
                     msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
                     return;
                 }
-                running->context = cpu_dump_context(cpu);
-                running->KCPU += (*quantum) * IncCPU;
-                User *user = uc_get_user(uc, running->UID);
-                if (user) {
-                    user->KCPUxU += (*quantum) * IncCPU;
-                    update_user_stats(user->uid, user->KCPUxU);
-                }
-                listaInsertarFinal(listos, running);
+                finished->context = cpu_dump_context(cpu);
 
-                PCB *current_process = listos->inicio;
-                do {
-                    current_process->KCPU /= 2;
-                    User *user = uc_get_user(uc, current_process->UID);
-                    if (user) {
-                        user->KCPUxU /= 2;
-                        current_process->P = PBase + current_process->KCPU/2 + (user->KCPUxU/(4*uc_get_weight(uc)));
-                    }
-                } while ((current_process = current_process->sig));
+                listaInsertarFinal(terminados, finished);
+                swap_free_frames(finished);
                 *quantum = 0;
-
                 cpu_reset(cpu);
                 process_update();
-                //struct timespec pausa = { .tv_sec = 1, .tv_nsec = 0 }; // 1 segundo
-                //clock_nanosleep(CLOCK_MONOTONIC, 0, &pausa, NULL);
-                return; // Salir para no procesar más eventos en este ciclo
+                return; // Salir después de manejar el evento de terminación
             }
-            
-            // Procesar eventos generados por la CPU
-            enum cpu_event event;
-            while ((event = cpu_poll_event(cpu)) != CPU_NONE) {
-                if (event == CPU_HALT) {
-                    // Proceso finalizado, moverlo a terminados
-                    PCB *finished = listaExtraeInicio(ejecucion);
-                    finished->KCPU += (*quantum) * IncCPU;
-                    User *user = uc_get_user(uc, finished->UID);
-                    if (user) {
-                        user->KCPUxU += (*quantum) * IncCPU;
-                        /*
-                         * Nunca deberíamos de quitar procesos a un usuario,
-                         * que no tiene procesos. Si esto sucede es un error
-                         * lógico grave.
-                         */
-                        assert(user->process_counter != 0);
-                        user->process_counter -= 1;
-                        if (user->process_counter == 0) {
-                            update_user_stats(user->uid, user->KCPUxU);
-                            uc_dealloc_user(uc, user->uid);
-                        }
-                    }
-                    if (finished == NULL) {
-                        msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
-                        return;
-                    }
-                    finished->context = cpu_dump_context(cpu);
 
-                    listaInsertarFinal(terminados, finished);
-                    *quantum = 0;
-                    cpu_reset(cpu);
-                    process_update();
-                    return; // Salir después de manejar el evento de terminación
-                }
-                
-                // Impresión de otros eventos
-                if (event == CPU_INSTRUCTION_EXECUTED) {
-                    msg_log(LOG_LEVEL_INFO, "Instrucción ejecutada correctamente.\n");
-                } else if (event == CPU_INSTRUCTION_INVALID) {
-                    msg_log(LOG_LEVEL_ERROR, "Instrucción inválida.\n");
-                } else if (event == CPU_DIVISION_BY_ZERO) {
-                    char irstr[50];
-                    inst_to_str((struct inst *)&proceso->context.regs[REG_IR], irstr, sizeof(irstr));
-                    char logstr[200];
-                    snprintf(logstr, sizeof(logstr), "División por cero detectada: PID == %d, IR == %s, PC == %ld", 
-                             proceso->PID, irstr, proceso->context.regs[REG_PC]);
-                    msg_log(LOG_LEVEL_WARN, logstr);
-                } else if (event == CPU_REGISTER_OVERFLOW) {
-                    msg_log(LOG_LEVEL_WARN, "Desbordamiento de registro.\n");
-                } else {
-                    msg_log(LOG_LEVEL_INFO, "Evento no reconocido.\n");
-                }
+            // Manejo de otros eventos
+            if (event == CPU_INSTRUCTION_EXECUTED) {
+                msg_log(LOG_LEVEL_INFO, "Instrucción ejecutada correctamente.\n");
+            } else if (event == CPU_INSTRUCTION_INVALID) {
+                msg_log(LOG_LEVEL_ERROR, "Instrucción inválida.\n");
+            } else if (event == CPU_DIVISION_BY_ZERO) {
+                char irstr[50];
+                inst_to_str((struct inst *)&proceso->context.regs[REG_IR], irstr, sizeof(irstr));
+                char logstr[200];
+                snprintf(logstr, sizeof(logstr), "División por cero detectada: PID == %d, IR == %s, PC == %ld", 
+                         proceso->PID, irstr, proceso->context.regs[REG_PC]);
+                msg_log(LOG_LEVEL_WARN, logstr);
+            } else if (event == CPU_REGISTER_OVERFLOW) {
+                msg_log(LOG_LEVEL_WARN, "Desbordamiento de registro.\n");
+            } else {
+                msg_log(LOG_LEVEL_INFO, "Evento no reconocido.\n");
             }
+        }
+
+        // Incrementar el quantum porque se ejecutó una instrucción
+        (*quantum)++;
+
+        // Verificar si se superó el quantum
+        if (*quantum >= MAX_QUANTUM) {
+            // Quantum expirado: guardar contexto y mover el proceso de vuelta a listos
+            PCB *running = listaExtraeInicio(ejecucion);
+            if (running == NULL) {
+                msg_log(LOG_LEVEL_ERROR, "Error: No se pudo extraer el proceso de ejecución.\n");
+                return;
+            }
+            running->context = cpu_dump_context(cpu);
+            running->KCPU += (*quantum) * IncCPU;
+
+            // Actualizar estadísticas del usuario
+            User *user = uc_get_user(uc, running->UID);
+            if (user) {
+                user->KCPUxU += (*quantum) * IncCPU;
+                update_user_stats(user->uid, user->KCPUxU);
+            }
+
+            listaInsertarFinal(listos, running);
+
+            // Recalcular prioridades de los procesos en la lista de listos
+            PCB *current_process = listos->inicio;
+            do {
+                current_process->KCPU /= 2;
+                User *user = uc_get_user(uc, current_process->UID);
+                if (user) {
+                    user->KCPUxU /= 2;
+                    current_process->P = PBase + current_process->KCPU / 2 + (user->KCPUxU / (4 * uc_get_weight(uc)));
+                }
+            } while ((current_process = current_process->sig));
+
+            *quantum = 0;
+            cpu_reset(cpu);
+            process_update();
+            return; // Salir para no procesar más eventos en este ciclo
+        }
+
+        
+    }
+}
+
+/**
+ * \brief Inicializa la ventana TMS (Tabla de Memoria de Segmentos).
+ *
+ * Esta función crea una nueva ventana para mostrar la Tabla de Memoria de Segmentos (TMS),
+ * que muestra los marcos de memoria y sus respectivos PIDs asignados.
+ */
+
+ void tms_init() {
+    tms_win = newwin(19, 16, 24, 0); // Mismo tamaño y posición
+    
+    box(tms_win, 0, 0);
+    mvwprintw(tms_win, 0, 6, "TMS");
+    
+    // Inicializar todos los marcos a 0
+    for (int i = 0; i < TOTAL_MARCOS; i++) {
+        tms_frames[i] = 0;
+    }
+    
+    wrefresh(tms_win);
+}
+
+/* \brief Actualiza la ventana TMS con los marcos y sus PIDs.
+ *
+ * Esta función limpia la ventana TMS y muestra el estado actual de los marcos
+ * de memoria, mostrando el PID asignado a cada marco.
+ */
+
+ void tms_update() {
+    werase(tms_win);
+    box(tms_win, 0, 0);
+    
+    mvwprintw(tms_win, 0, 6, "TMS");
+    mvwprintw(tms_win, 1, 1, "Marcos-PID");
+    
+    for (int i = 0; i < MARCOS_VISIBLES; i++) {
+        int marco_actual = tms_scroll_offset + i;
+        if (marco_actual >= TOTAL_MARCOS) break;
+        
+        char marco[5];
+        snprintf(marco, sizeof(marco), "%03X", marco_actual);
+        mvwprintw(tms_win, i+2, 1, "%s - %d", marco, tms_frames[marco_actual]);
+    }
+    
+    wrefresh(tms_win);
+}
+
+void tms_handle_input(int c) {
+    switch(c) {
+        case KEY_F(5): // Bajar
+            if (tms_scroll_offset + MARCOS_VISIBLES < TOTAL_MARCOS) {
+                tms_scroll_offset += MARCOS_VISIBLES;
+                tms_update();
+            }
+            break;
+            
+        case KEY_F(6): // Subir
+            if (tms_scroll_offset - MARCOS_VISIBLES >= 0) {
+                tms_scroll_offset -= MARCOS_VISIBLES;
+                tms_update();
+            }
+            break;
+    }
+}
+
+/**
+ * \brief Asigna un PID a un marco de memoria en el TMS.
+ *
+ * Esta función asigna un PID a un marco de memoria específico en el TMS.
+ * Si el número de marco es válido (entre 0 y 15), se asigna el PID al marco.
+ *
+ * \param frame_num Número del marco (0-15).
+ * \param pid ID del proceso a asignar al marco.
+ */
+void tms_assign_frame(int frame_num, int pid) {
+    if (frame_num >= 0 && frame_num < TOTAL_MARCOS) {
+        tms_frames[frame_num] = pid;
+        
+        // Si el marco está visible, actualizar
+        if (frame_num >= tms_scroll_offset && 
+            frame_num < tms_scroll_offset + MARCOS_VISIBLES) {
+            tms_update();
+        }
+    }
+}
+
+/**
+ * \brief Libera un marco de memoria en el TMS.
+ *
+ * Esta función libera un marco de memoria específico en el TMS, estableciendo su PID a 0.
+ * Si el número de marco es válido (entre 0 y 15), se libera el marco.
+ *
+ * \param frame_num Número del marco (0-15) a liberar.
+ */
+void tms_free_frame(int frame_num) {
+    if (frame_num >= 0 && frame_num < TOTAL_MARCOS) {
+        tms_frames[frame_num] = 0;
+        
+        // Si el marco está visible, actualizar
+        if (frame_num >= tms_scroll_offset && 
+            frame_num < tms_scroll_offset + MARCOS_VISIBLES) {
+            tms_update();
         }
     }
 }
@@ -706,6 +890,7 @@ process_init(void)
     listos = malloc(sizeof(*listos));
     ejecucion = malloc(sizeof(*ejecucion));
     terminados = malloc(sizeof(*terminados));
+    nuevos = malloc(sizeof(*nuevos));
     if (listos == NULL || ejecucion == NULL || terminados == NULL) {
         msg_log(LOG_LEVEL_ERROR, "Error al inicializar las listas de procesos.\n");
         return -1;
@@ -713,7 +898,8 @@ process_init(void)
     crearLista(listos);
     crearLista(ejecucion);
     crearLista(terminados);
-    process = newwin(42, 125, 0, 81);
+    crearLista(nuevos);
+    process = newwin(24, 125, 0, 81);
     box(process, 0, 0);
     wrefresh(process);
  
@@ -780,7 +966,7 @@ void process_update() {
 
     // Mostrar el conteo de archivos únicos activos (ejecución + listos)
     mvwprintw(process, 1, 2, "Archivos únicos activos: %d   Usuarios activos: %d", unique_files, numUsers);
-    mvwprintw(process, 2, 2, "------------------------------------------------|PROCESADOR|-----------------------------------------------");
+    mvwprintw(process, 2, 2, "------------------------------------------------|EJECUCION|-----------------------------------------------");
 
     // Resto de la función permanece igual...
     if (ejecucion->inicio != NULL) {
@@ -808,7 +994,7 @@ void process_update() {
     }
 
 
-    mvwprintw(process, 4, 2, "--------------------------------------------------|LISTA|--------------------------------------------------");
+    mvwprintw(process, 4, 2, "--------------------------------------------------|LISTOS|--------------------------------------------------");
     actual = listos->inicio;
     int fila = 5; 
     while (actual != NULL) {
@@ -819,6 +1005,8 @@ void process_update() {
         actual = actual->sig;
         fila++;
     }
+
+    //mvwprintw(process, 6, 2, "------------------------------------------------|NUEVOS|-----------------------------------------------");
 
     int fila_terminados = fila;
     clear_window_part(process, fila_terminados, 2, 18 - fila_terminados, 76);
@@ -842,6 +1030,63 @@ void process_update() {
     wrefresh(process); 
 }
 
+/**
+ * \brief Regresa el PID del proceso que está manejando el sistema operativo
+ * 
+ * Obtenemos el identificador único del proceso actual por el que se está 
+ * preocupando el SO, esto existe para exponer el estado del SO y así permitir
+ * la comunicación con otros dispositivos de la computadora simulada (como el
+ * MMU).
+ * 
+ * \returns PID de proceso en ejecución, 0 en caso de no tener procesos en
+ *          ejecución (algo que no debería suceder).
+ */
+uint32_t
+os_get_curr_pid()
+{
+    return (ejecucion && ejecucion->inicio)? ejecucion->inicio->PID : 0;
+}
+
+PCB *
+os_find_brother(PCB *pcb) {
+    PCB *current = listos->inicio;
+    while (current) {
+        if (current != pcb && current->UID == pcb->UID && 
+            strcmp(current->fileName, pcb->fileName) == 0) {
+            return current; // Retorna el primer hermano encontrado
+        }
+        current = current->sig;
+    }
+    
+    current = ejecucion->inicio;
+    while (current) {
+        if (current != pcb && current->UID == pcb->UID && 
+            strcmp(current->fileName, pcb->fileName) == 0) {
+            return current; // Retorna el primer hermano encontrado
+        }
+        current = current->sig;
+    }
+    
+    return NULL;
+}
+
+struct PCB *
+os_get_proc(uint16_t pid)
+{
+    if (pid == 0) {
+        return NULL; // No hay proceso con PID 0
+    }
+    PCB *proceso = listaBuscarPID(listos, pid);
+    if (proceso) {
+        return proceso;
+    }
+
+    proceso = listaBuscarPID(ejecucion, pid);
+    if (proceso) {
+        return proceso;
+    }
+    return NULL; // No se encontró el proceso
+}
 
 /**
  * \brief Función principal del programa.
@@ -862,6 +1107,7 @@ main(void) {
 
     msg_init();
     process_init();
+    swap_init();
 
     swap_init();
 
@@ -871,9 +1117,19 @@ main(void) {
     wrefresh(reg);
     prompt.win = newwin(7, 80, 17, 0);
     box(prompt.win, 0, 0);
-    counter = newwin(7, 80, 24, 0);
-    box(counter, 0, 0);
-    wrefresh(counter);
+    //counter = newwin(7, 80, 24, 0);
+    //box(counter, 0, 0);
+    //wrefresh(counter);
+
+    //inicializar la ventana de TMS
+    tms_init();
+    tms_assign_frame(1, 1); //Asignar marco
+    tms_free_frame(1); //Liberar marco
+    tms_update();
+
+    //inicializar la ventan del SWAP
+    //Pendiente
+
     wrefresh(prompt.win);
     nodelay(prompt.win, TRUE); 
     keypad(prompt.win, TRUE);
@@ -942,6 +1198,8 @@ main(void) {
     liberarLista(listos);
     liberarLista(ejecucion);
     liberarLista(terminados);
+
+    swap_close();
 
     endwin();
     return 0;
