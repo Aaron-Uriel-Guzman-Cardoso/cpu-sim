@@ -16,6 +16,7 @@
 #include <os.h>
 #include <swap.h>
 #include <mmu.h>
+#include <swap_disp.h>
 
 #include "../include/cpu.h"
 
@@ -321,8 +322,12 @@ struct user_control *uc;
 
 int32_t 
 eval(struct cmd *cmd) { 
-
-    // Scrroll en el TMS
+    if (strncmp(cmd->name, "F7", 2) == 0) {
+        swap_disp_pg_up();
+    }
+    else if (strncmp(cmd->name, "F8", 2) == 0) {
+        swap_disp_pg_dn();
+    }
     if (strncmp(cmd->name, "F5", 2) == 0) {
         // Bajar en el TMS 
         if (tms_scroll_offset + MARCOS_VISIBLES < TOTAL_MARCOS) {
@@ -1108,6 +1113,7 @@ main(void) {
     msg_init();
     process_init();
     swap_init();
+    swap_disp_init();
 
     swap_init();
 
