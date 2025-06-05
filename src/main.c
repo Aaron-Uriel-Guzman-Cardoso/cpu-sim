@@ -33,13 +33,8 @@ int user_stats_count = 0;
 
 // Variables para controlar el scroll
 WINDOW *tms_win;
-uint32_t tms_frames[TOTAL_MARCOS] = {0};
+//uint32_t tms_frames[TOTAL_MARCOS] = {0};
 int tms_scroll_offset = 0;
-
-void tms_init();
-void tms_update();
-void tms_assign_frame(int frame_num, int pid);
-void tms_free_frame(int frame_num);
 
 struct cmd {
     char name[MAX_CMD_CHARS];
@@ -69,9 +64,9 @@ enum prompt_status {
 };
 
 
-struct os {
+/*struct os {
     uint32_t tms[MAX_AVAILABLE_FRAMES];
-};
+};*/
 Lista *listos, *ejecucion, *terminados, *nuevos;
 
 WINDOW *reg;
@@ -322,17 +317,13 @@ struct user_control *uc;
 
 int32_t 
 eval(struct cmd *cmd) { 
-    if (strncmp(cmd->name, "F7", 2) == 0) {
-        swap_disp_pg_up();
-    }
-    else if (strncmp(cmd->name, "F8", 2) == 0) {
-        swap_disp_pg_dn();
-    }
+
+    // Scroll en el TMS
     if (strncmp(cmd->name, "F5", 2) == 0) {
         // Bajar en el TMS 
         if (tms_scroll_offset + MARCOS_VISIBLES < TOTAL_MARCOS) {
             tms_scroll_offset += MARCOS_VISIBLES;
-            tms_update();
+            tms_update(tms_win, tms_scroll_offset);
         }
         return 0;
     } 
@@ -340,11 +331,10 @@ eval(struct cmd *cmd) {
         // Subir en el TMS
         if (tms_scroll_offset - MARCOS_VISIBLES >= 0) {
             tms_scroll_offset -= MARCOS_VISIBLES;
-            tms_update();
+            tms_update(tms_win, tms_scroll_offset);
         }
         return 0;
     }
-
     else if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
         liberarLista(listos);
         liberarLista(ejecucion);
@@ -354,8 +344,7 @@ eval(struct cmd *cmd) {
         printf("\n");
         swap_close();
         exit(0);
-    } 
-    
+    }
     else if (strncmp(cmd->name, "LOAD", 4) == 0) {
         if (cmd->arg1[0] == '\0') {
             msg_log(LOG_LEVEL_ERROR, "Falta el nombre del archivo\n");
@@ -420,16 +409,14 @@ eval(struct cmd *cmd) {
                         listaInsertarFinal(listos, nuevo_proceso);
                         user_new -> process_counter += 1;
                         msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
-                        
+                        tms_update(tms_win, tms_scroll_offset);  
                     }
                     break;
                 case 2:
                     listaInsertarFinal(listos, nuevo_proceso);
                     msg_log(LOG_LEVEL_INFO, "Proceso hermano guardado.\n");
                     break;
-                }
-                
-                    
+                }  
                 process_update();
             }
             else
@@ -439,7 +426,8 @@ eval(struct cmd *cmd) {
             }
             
         }
-    }else if (strncmp(cmd->name, "KILL", 4) == 0) {
+    }
+    else if (strncmp(cmd->name, "KILL", 4) == 0) {
         if (cmd->arg1[0] == '\0') {
             msg_log(LOG_LEVEL_ERROR, "Falta el PID del proceso a eliminar.\n");
             return 1;
@@ -565,6 +553,7 @@ void ejecutarProcesos(int32_t *quantum) {
             listaInsertarFinal(nuevos, proceso_nuevo);
             msg_log(LOG_LEVEL_WARN, "No hay espacio en SWAP para el proceso. Permanece en Nuevos.\n");
         }
+        tms_update(tms_win, tms_scroll_offset);
     }
 
     // Si no hay proceso en ejecución y hay procesos en listos, mover el proceso con menor prioridad a Ejecución
@@ -633,6 +622,7 @@ void ejecutarProcesos(int32_t *quantum) {
 
                 listaInsertarFinal(terminados, finished);
                 swap_free_frames(finished);
+                tms_update(tms_win, tms_scroll_offset);
                 *quantum = 0;
                 cpu_reset(cpu);
                 process_update();
@@ -699,111 +689,6 @@ void ejecutarProcesos(int32_t *quantum) {
         }
 
         
-    }
-}
-
-/**
- * \brief Inicializa la ventana TMS (Tabla de Memoria de Segmentos).
- *
- * Esta función crea una nueva ventana para mostrar la Tabla de Memoria de Segmentos (TMS),
- * que muestra los marcos de memoria y sus respectivos PIDs asignados.
- */
-
- void tms_init() {
-    tms_win = newwin(19, 16, 24, 0); // Mismo tamaño y posición
-    
-    box(tms_win, 0, 0);
-    mvwprintw(tms_win, 0, 6, "TMS");
-    
-    // Inicializar todos los marcos a 0
-    for (int i = 0; i < TOTAL_MARCOS; i++) {
-        tms_frames[i] = 0;
-    }
-    
-    wrefresh(tms_win);
-}
-
-/* \brief Actualiza la ventana TMS con los marcos y sus PIDs.
- *
- * Esta función limpia la ventana TMS y muestra el estado actual de los marcos
- * de memoria, mostrando el PID asignado a cada marco.
- */
-
- void tms_update() {
-    werase(tms_win);
-    box(tms_win, 0, 0);
-    
-    mvwprintw(tms_win, 0, 6, "TMS");
-    mvwprintw(tms_win, 1, 1, "Marcos-PID");
-    
-    for (int i = 0; i < MARCOS_VISIBLES; i++) {
-        int marco_actual = tms_scroll_offset + i;
-        if (marco_actual >= TOTAL_MARCOS) break;
-        
-        char marco[5];
-        snprintf(marco, sizeof(marco), "%03X", marco_actual);
-        mvwprintw(tms_win, i+2, 1, "%s - %d", marco, tms_frames[marco_actual]);
-    }
-    
-    wrefresh(tms_win);
-}
-
-void tms_handle_input(int c) {
-    switch(c) {
-        case KEY_F(5): // Bajar
-            if (tms_scroll_offset + MARCOS_VISIBLES < TOTAL_MARCOS) {
-                tms_scroll_offset += MARCOS_VISIBLES;
-                tms_update();
-            }
-            break;
-            
-        case KEY_F(6): // Subir
-            if (tms_scroll_offset - MARCOS_VISIBLES >= 0) {
-                tms_scroll_offset -= MARCOS_VISIBLES;
-                tms_update();
-            }
-            break;
-    }
-}
-
-/**
- * \brief Asigna un PID a un marco de memoria en el TMS.
- *
- * Esta función asigna un PID a un marco de memoria específico en el TMS.
- * Si el número de marco es válido (entre 0 y 15), se asigna el PID al marco.
- *
- * \param frame_num Número del marco (0-15).
- * \param pid ID del proceso a asignar al marco.
- */
-void tms_assign_frame(int frame_num, int pid) {
-    if (frame_num >= 0 && frame_num < TOTAL_MARCOS) {
-        tms_frames[frame_num] = pid;
-        
-        // Si el marco está visible, actualizar
-        if (frame_num >= tms_scroll_offset && 
-            frame_num < tms_scroll_offset + MARCOS_VISIBLES) {
-            tms_update();
-        }
-    }
-}
-
-/**
- * \brief Libera un marco de memoria en el TMS.
- *
- * Esta función libera un marco de memoria específico en el TMS, estableciendo su PID a 0.
- * Si el número de marco es válido (entre 0 y 15), se libera el marco.
- *
- * \param frame_num Número del marco (0-15) a liberar.
- */
-void tms_free_frame(int frame_num) {
-    if (frame_num >= 0 && frame_num < TOTAL_MARCOS) {
-        tms_frames[frame_num] = 0;
-        
-        // Si el marco está visible, actualizar
-        if (frame_num >= tms_scroll_offset && 
-            frame_num < tms_scroll_offset + MARCOS_VISIBLES) {
-            tms_update();
-        }
     }
 }
 
@@ -1128,10 +1013,11 @@ main(void) {
     //wrefresh(counter);
 
     //inicializar la ventana de TMS
-    tms_init();
-    tms_assign_frame(1, 1); //Asignar marco
-    tms_free_frame(1); //Liberar marco
-    tms_update();
+    tms_win = newwin(19, 16, 24, 0);
+    tms_init(tms_win);
+    //tms_assign_frame(1, 1); //Asignar marco
+    //tms_free_frame(1); //Liberar marco
+    tms_update(tms_win, tms_scroll_offset);
 
     //inicializar la ventan del SWAP
     //Pendiente
@@ -1168,6 +1054,7 @@ main(void) {
 
         // Ejecutar procesos
         ejecutarProcesos(&quantum);
+        regwin_update();
         counterWin();
 
         /**f
