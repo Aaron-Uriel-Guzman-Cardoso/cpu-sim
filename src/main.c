@@ -24,7 +24,6 @@
 #define PBASE 60
 #define MAX_USER_STATS 256
 
-UserStats user_stats[MAX_USER_STATS];
 int user_stats_count = 0;
 
 #define TOTAL_MARCOS 4096  // Desde 000 hasta FFF
@@ -160,11 +159,31 @@ regwin_update(void)
     mvwprintw(reg, 3, 2, "BX: %ld", context.regs[REG_BX]);
     mvwprintw(reg, 4, 2, "CX: %ld", context.regs[REG_CX]);
     mvwprintw(reg, 5, 2, "freq: %g Hz", cpu_get_freq(cpu));
-    mvwprintw(reg, 2, 35, "DX: %ld", context.regs[REG_DX]);
-    mvwprintw(reg, 3, 35, "PC: %ld", context.regs[REG_PC]);
+    mvwprintw(reg, 2, 18, "DX: %ld", context.regs[REG_DX]);
+    mvwprintw(reg, 3, 18, "PC: %ld", context.regs[REG_PC]);
     char current_inst[50];
     inst_to_str((struct inst *)&context.regs[REG_IR], current_inst, 50);
-    mvwprintw(reg, 4, 35, "IR: %s", current_inst);
+    mvwprintw(reg, 4, 18, "IR: %s", current_inst);
+
+    if (ejecucion->inicio != NULL) {
+        PCB *proceso = ejecucion->inicio;
+        mvwprintw(reg, 1, 36, "Proceso PID: %d", proceso->PID);
+
+        int max_lines = 7; // Espacio disponible para imprimir marcos
+        int lines_used = 2; 
+        for (int i = 0; i < proceso->tmp_size && lines_used < max_lines + 8; i++) {
+            mvwprintw(reg, lines_used, 36, "Marco %d -> SWAP Marco %03X", i, proceso->tmp[i]);
+            lines_used++;
+        }
+
+        if (lines_used == max_lines + 8) {
+            mvwprintw(reg, lines_used, 36, "... (más marcos no mostrados)");
+        }
+    } else {
+        mvwprintw(reg, 1, 36, "No hay proceso en ejecución.");
+    }
+
+
     wrefresh(reg);
     return 0;
 }
@@ -564,6 +583,8 @@ void ejecutarProcesos(int32_t *quantum) {
         listaInsertarFinal(ejecucion, proceso);
         *quantum = 0; // Reiniciar el quantum
 
+        //print_process_frames(msg,proceso, 8)
+
         // Verificar si el proceso ya tiene contexto previo (fue interrumpido por quantum)
         if (proceso->context.regs[REG_PC] > 1) {
             // El proceso ya se ejecutó antes - restaurar su contexto
@@ -871,7 +892,7 @@ void process_update() {
                   proceso->UID, 
                   proceso->P,
                   proceso->KCPU,
-                  user->KCPUxU,
+                  user_stats[proceso->UID].KCPUxU,
                   proceso->fileName, 
                   context.regs[REG_AX], 
                   context.regs[REG_BX],

@@ -28,7 +28,7 @@ void swap_init() {
     
     // Inicializar TMS
     for (int i = 0; i < MAX_FRAMES; i++) {
-        swap_map[i].pid = -1;
+        swap_map[i].pid = 0;
     }
 }
 
@@ -57,7 +57,7 @@ int swap_allocate_frames(PCB *pcb) {
     pcb->tmp_size = 0;
 
     for (int i = 0; i < MAX_FRAMES && pcb->tmp_size < frames_needed; i++) {
-        if (swap_map[i].pid == -1) {
+        if (swap_map[i].pid == 0) {
             swap_map[i].pid = pcb->PID;
             pcb->tmp[pcb->tmp_size++] = i;
         }
@@ -79,7 +79,7 @@ void swap_free_frames(PCB *pcb) {
     }
     else {
         for (int i = 0; i < pcb->tmp_size; i++) {
-            swap_map[pcb->tmp[i]].pid = -1;
+            swap_map[pcb->tmp[i]].pid = 0;
         }
     }
     free(pcb->tmp);
@@ -335,4 +335,37 @@ void tms_handle_input(WINDOW *tms_win, int c, int tms_scroll_offset) {
         }
     }
 }*/
+
+/**
+ * \brief Imprime los marcos ocupados por un proceso y sus equivalentes en SWAP.
+ *
+ * \param pcb Puntero al proceso (PCB) cuyos marcos se desean imprimir.
+ * \param max_lines Número máximo de líneas que se pueden imprimir en la ventana.
+ * \param msg Puntero a la ventana de mensajes
+ */
+void print_process_frames(WINDOW *msg, PCB *pcb, int max_lines) {
+    if (!pcb || !pcb->tmp) {
+        mvwprintw(msg, 1, 2, "Error: El proceso no tiene marcos asignados.");
+        wrefresh(msg);
+        return;
+    }
+
+    werase(msg); // Limpiar la ventana de mensajes
+    box(msg, 0, 0);
+
+    mvwprintw(msg, 1, 2, "Marcos ocupados por el proceso PID: %d", pcb->PID);
+    mvwprintw(msg, 2, 2, "----------------------------------------");
+
+    int lines_used = 3; // Contador de líneas usadas (incluyendo encabezados)
+    for (int i = 0; i < pcb->tmp_size && lines_used < max_lines; i++) {
+        mvwprintw(msg, lines_used, 2, "Marco %d -> SWAP Marco %d", i, pcb->tmp[i]);
+        lines_used++;
+    }
+
+    if (lines_used == max_lines) {
+        mvwprintw(msg, lines_used, 2, "... (más marcos no mostrados)");
+    }
+
+    wrefresh(msg);
+}
 
