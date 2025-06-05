@@ -33,6 +33,6 @@ int swap_get_free_frame_count();
 bool has_brothers(PCB *pcb, Lista *listos, Lista *ejecucion);
 void tms_init(WINDOW *);
 void tms_update(WINDOW *, int);
-void tmsx_handle_input(WINDOW *, int);
+void tms_handle_input(WINDOW *, int, int);
 
 #endif

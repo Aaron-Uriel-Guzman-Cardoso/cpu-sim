@@ -244,7 +244,7 @@ int swap_get_free_frame_count() {
  */
 
  void tms_init(WINDOW *tms_win) {
-    tms_win = newwin(19, 16, 24, 0); // Mismo tamaño y posición
+    //tms_win = newwin(19, 16, 24, 0); // Mismo tamaño y posición
     
     box(tms_win, 0, 0);
     mvwprintw(tms_win, 0, 6, "TMS");

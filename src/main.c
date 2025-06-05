@@ -410,16 +410,14 @@ eval(struct cmd *cmd) {
                         listaInsertarFinal(listos, nuevo_proceso);
                         user_new -> process_counter += 1;
                         msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
-                        
+                        tms_update(tms_win, tms_scroll_offset);  
                     }
                     break;
                 case 2:
                     listaInsertarFinal(listos, nuevo_proceso);
                     msg_log(LOG_LEVEL_INFO, "Proceso hermano guardado.\n");
                     break;
-                }
-                
-                tms_update(tms_win, tms_scroll_offset);    
+                }  
                 process_update();
             }
             else
@@ -1014,6 +1012,7 @@ main(void) {
     //wrefresh(counter);
 
     //inicializar la ventana de TMS
+    tms_win = newwin(19, 16, 24, 0);
     tms_init(tms_win);
     //tms_assign_frame(1, 1); //Asignar marco
     //tms_free_frame(1); //Liberar marco
@@ -1054,6 +1053,7 @@ main(void) {
 
         // Ejecutar procesos
         ejecutarProcesos(&quantum);
+        regwin_update();
         counterWin();
 
         /**f
