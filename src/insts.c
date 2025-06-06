@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include <stdbool.h>
 
@@ -29,6 +30,18 @@ inst_from_str(const char *buf)
     char arg2[11]; /* arg2 puede ser un número de hasta 10 dígitos*/
     int32_t args = sscanf(buf, "%4s %4s %10s", name, arg1, arg2);
     struct inst *new_inst = malloc(sizeof(*new_inst));
+
+    for (int i = 0; i < 4 && name[i] != '\0'; i++) {
+        name[i] = toupper((unsigned char)name[i]);
+    }
+    for (int i = 0; i < 4 && arg1[i] != '\0'; i++) {
+        arg1[i] = toupper((unsigned char)arg1[i]);
+    }
+    for (int i = 0; i < 4 && name[i] != '\0'; i++) {
+        arg2[i] = toupper((unsigned char)arg1[i]);
+    }
+
+
     if (new_inst) {
         if (args == 1 || args == 2) {
             new_inst->op = op_from_str(name, true);
@@ -69,9 +82,15 @@ inst_from_str(const char *buf)
             new_inst->imm = tmp;
             if (end == arg2 || *end != '\0') {
                 new_inst->op = op_from_str(name, false);
+                if (new_inst->op == OP_LIMIT) {
+                    goto err;
+                }
                 new_inst->rb = reg_from_str(arg2);
             } else {
                 new_inst->op = op_from_str(name, true);
+                if (new_inst->op == OP_LIMIT) {
+                    goto err;
+                }
             }
         }
     }
