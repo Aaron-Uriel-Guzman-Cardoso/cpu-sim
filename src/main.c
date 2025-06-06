@@ -232,24 +232,6 @@ void cargarProceso(Lista *listos, const char *fileName) {
  * \return No devuelve ningún valor (void).
  */
 void ejecutarProcesos(int32_t *quantum) {
-    // Intentar cargar procesos desde la lista 'nuevos' a la SWAP
-    if (nuevos->inicio != NULL) {
-        PCB *proceso_nuevo = listaExtraeInicio(nuevos);
-        if (swap_load_program1(proceso_nuevo, proceso_nuevo->fileName) == 0) {
-            // Proceso cargado correctamente, mover a `listos`
-            listaInsertarFinal(listos, proceso_nuevo);
-            msg_log(LOG_LEVEL_INFO, "Proceso movido de Nuevos a Listos.\n");
-            process_update();
-            tms_disp_update();
-            swap_disp_update();
-        } else {
-            // No se pudo cargar, devolver el proceso a `nuevos`
-            listaInsertarFinal(nuevos, proceso_nuevo);
-            msg_log(LOG_LEVEL_WARN, "No hay espacio en SWAP para el proceso. Permanece en Nuevos.\n");
-        }
-        
-    }
-
     // Si no hay proceso en ejecución y hay procesos en listos, mover el proceso con menor prioridad a Ejecución
     if (ejecucion->inicio == NULL && listos->inicio != NULL) {
         PCB *proceso = listaExtraePrioridad(listos);
@@ -322,6 +304,28 @@ void ejecutarProcesos(int32_t *quantum) {
                 *quantum = 0;
                 cpu_reset(cpu);
                 process_update();
+
+                // Mover procesos de Nuevos a Listos
+                while (nuevos->inicio != NULL) { 
+                PCB *proceso_nuevo = nuevos->inicio; 
+                if (swap_load_program1(proceso_nuevo, proceso_nuevo->fileName) == 0) {
+                    proceso_nuevo = listaExtraeInicio(nuevos); 
+                    listaInsertarFinal(listos, proceso_nuevo); 
+
+                    User *user_new = uc_get_user(uc, proceso_nuevo->UID);
+                    if (user_new) {
+                       user_new->process_counter += 1;
+                    }
+                    
+                    msg_log(LOG_LEVEL_INFO, "Proceso movido de Nuevos a Listos.\n");
+                    process_update();
+                    tms_disp_update();
+                } else {
+                    msg_log(LOG_LEVEL_WARN, "No hay espacio en SWAP para el proceso. Permanece en Nuevos.\n");
+                    break; 
+                }
+                }
+
                 return; // Salir después de manejar el evento de terminación
             }
 
@@ -590,15 +594,15 @@ void process_update(void) {
         fila++;
     }
 
-    mvwprintw(process, 6, 2, "------------------------------------------------|NUEVOS|-----------------------------------------------");
-    actual = nuevos->inicio;
-    int fila_nuevos = 5; 
-    while (actual != NULL) {
-        User *user = uc_get_user(uc, actual->UID);
+    mvwprintw(process, fila, 2, "--------------------------------------------------|NUEVOS|--------------------------------------------------");
+    PCB *nuevo = nuevos->inicio;
+    fila++;
+    while (nuevo != NULL) {
+        User *user = uc_get_user(uc, nuevo->UID);
         char str[200];
-        pcb_as_str(actual, str, sizeof(str), user); 
-        mvwprintw(process, fila_nuevos, 2, "%s", str);
-        actual = actual->sig;
+        pcb_as_str(nuevo, str, sizeof(str), user); 
+        mvwprintw(process, fila, 2, "%s", str);
+        nuevo = nuevo->sig;
         fila++;
     }
 
@@ -907,8 +911,7 @@ main(void) {
     // Inicializar el quantum
     int quantum = 0;
 
-    process_update();
-
+    //process_update();
 
     while (true) {
         tui_input_handler();
