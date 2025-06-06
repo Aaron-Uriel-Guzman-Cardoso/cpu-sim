@@ -784,6 +784,16 @@ prompt_handle_cmd(struct cmd *cmd)
                     break;
                 case 0:
                     if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
+                        User *user_new;
+                        if (!uc_user_exists(uc, uid)) {
+                            user_new = crearUsuario(uid);
+                            user_new->process_counter = 0;
+                            uc_alloc_user(uc, user_new);
+                        } else {
+                            user_new = uc_get_user(uc, uid);
+                        }
+                        user_new->process_counter += 1;
+                        nuevo_proceso->UID = user_new->uid;
 
                         listaInsertarFinal(listos, nuevo_proceso);
                         msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
