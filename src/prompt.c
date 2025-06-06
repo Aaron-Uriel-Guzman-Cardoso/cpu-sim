@@ -37,7 +37,7 @@ prompt_init(void)
     }
     prompt->buf[0] = '\0';
     prompt->buflen = 0;
-    prompt->win = newwin(7, 80, 17, 0);
+    prompt->win = newwin(7, 110, 17, 0);
     box(prompt->win, 0, 0);
     prompt->hist.current = 0;
     prompt->hist.size = 0;

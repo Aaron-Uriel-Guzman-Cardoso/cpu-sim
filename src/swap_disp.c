@@ -16,8 +16,8 @@ struct swap_disp_state {
 void
 swap_disp_init(void)
 {
-    swap_disp_state.margin = newwin(18, 90, 25, 116);
-    swap_disp_state.win = newwin(16, 88, 26, 117);
+    swap_disp_state.margin = newwin(18, 94, 25, 16);
+    swap_disp_state.win = newwin(16, 92, 26, 17);
     swap_disp_state.curr_pg = 0;
     box(swap_disp_state.margin, 0, 0);
     mvwprintw(swap_disp_state.margin, 0, 1, "Swap");

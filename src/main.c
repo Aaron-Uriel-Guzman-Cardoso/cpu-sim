@@ -81,7 +81,7 @@ void process_update();
 int32_t
 regwin_update(void)
 {
-    clear_window_part(reg, 1, 1, 5, 78);
+    clear_window_part(reg, 1, 1, 5, 108);
     struct cpu_context context = cpu_dump_context(cpu);
     mvwprintw(reg, 2, 2, "AX: %ld", context.regs[REG_AX]);
     mvwprintw(reg, 3, 2, "BX: %ld", context.regs[REG_BX]);
@@ -95,20 +95,20 @@ regwin_update(void)
 
     if (ejecucion->inicio != NULL) {
         PCB *proceso = ejecucion->inicio;
-        mvwprintw(reg, 1, 36, "Proceso PID: %d", proceso->PID);
+        mvwprintw(reg, 1, 52, "Proceso PID: %d", proceso->PID);
 
         int max_lines = 7; // Espacio disponible para imprimir marcos
         int lines_used = 2; 
         for (int i = 0; i < proceso->tmp_size && lines_used < max_lines + 8; i++) {
-            mvwprintw(reg, lines_used, 36, "Marco %d -> SWAP Marco %03X", i, proceso->tmp[i]);
+            mvwprintw(reg, lines_used, 52, "Marco %d -> SWAP Marco %03X", i, proceso->tmp[i]);
             lines_used++;
         }
 
         if (lines_used == max_lines + 8) {
-            mvwprintw(reg, lines_used, 36, "... (más marcos no mostrados)");
+            mvwprintw(reg, lines_used, 52, "... (más marcos no mostrados)");
         }
     } else {
-        mvwprintw(reg, 1, 36, "No hay proceso en ejecución.");
+        mvwprintw(reg, 1, 52, "No hay proceso en ejecución.");
     }
 
 
@@ -508,7 +508,7 @@ process_init(void)
  * \return No devuelve ningún valor (void).
  */
 void process_update(void) {
-    process = newwin(24, 125, 0, 81);
+    process = newwin(44, 125, 0, 110);
     box(process, 0, 0);
     wrefresh(process);
 
@@ -888,7 +888,7 @@ main(void) {
     curs_set(1);
     
     tui_input_handler_init();
-    reg = newwin(7, 80, 10, 0);
+    reg = newwin(7, 110, 10, 0);
     box(reg, 0, 0);
     wrefresh(reg);
     regwin_update();
