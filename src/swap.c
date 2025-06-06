@@ -1,12 +1,9 @@
-#include "swap.h"
+#include <swap.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ncurses.h>
 #include <cpu.h>
 #include <os.h>
-
-#define TOTAL_MARCOS 4096  
-#define MARCOS_VISIBLES 16
 
 // Archivo SWAP global
 static FILE *swapfile = NULL;
@@ -28,7 +25,7 @@ void swap_init() {
     
     // Inicializar TMS
     for (int i = 0; i < MAX_FRAMES; i++) {
-        swap_map[i].pid = -1;
+        swap_map[i].pid = 0;
     }
 }
 
@@ -57,7 +54,7 @@ int swap_allocate_frames(PCB *pcb) {
     pcb->tmp_size = 0;
 
     for (int i = 0; i < MAX_FRAMES && pcb->tmp_size < frames_needed; i++) {
-        if (swap_map[i].pid == -1) {
+        if (swap_map[i].pid == 0) {
             swap_map[i].pid = pcb->PID;
             pcb->tmp[pcb->tmp_size++] = i;
         }
@@ -79,7 +76,7 @@ void swap_free_frames(PCB *pcb) {
     }
     else {
         for (int i = 0; i < pcb->tmp_size; i++) {
-            swap_map[pcb->tmp[i]].pid = -1;
+            swap_map[pcb->tmp[i]].pid = 0;
         }
     }
     free(pcb->tmp);
@@ -246,4 +243,3 @@ int swap_get_free_frame_count() {
     }
     return count;
 }
-

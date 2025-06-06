@@ -10,8 +10,11 @@
 #include <cpu.h>
 #include <insts.h>
 #include <lista.h>
+#include <cpu.h>
 
 #define MAX_USER_STATS 256
+
+UserStats user_stats[MAX_USER_STATS];
 
 static int globalPID = 1;
 
