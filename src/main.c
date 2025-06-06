@@ -142,8 +142,8 @@ tui_input_handler()
 {
     char in_ch = wgetch(tui_input);
     char buffer[100];
-    snprintf(buffer, sizeof(buffer), "tui_input_handler: tecla %d", in_ch);
-    msg_log(LOG_LEVEL_INFO, buffer);
+    //snprintf(buffer, sizeof(buffer), "tui_input_handler: tecla %d", in_ch);
+    //msg_log(LOG_LEVEL_INFO, buffer);
     if (in_ch == ERR) {
         return false;
     }
@@ -485,10 +485,7 @@ process_init(void)
     crearLista(ejecucion);
     crearLista(terminados);
     crearLista(nuevos);
-    process = newwin(24, 125, 0, 81);
-    box(process, 0, 0);
-    wrefresh(process);
- 
+    
    return 0;
 }
 
@@ -507,8 +504,9 @@ process_init(void)
  * \return No devuelve ningún valor (void).
  */
 void process_update(void) {
-    werase(process);
+    process = newwin(24, 125, 0, 81);
     box(process, 0, 0);
+    wrefresh(process);
 
     // Contar archivos únicos en ejecución y listos (no terminados)
     int unique_files = 0;
@@ -592,7 +590,17 @@ void process_update(void) {
         fila++;
     }
 
-    //mvwprintw(process, 6, 2, "------------------------------------------------|NUEVOS|-----------------------------------------------");
+    mvwprintw(process, 6, 2, "------------------------------------------------|NUEVOS|-----------------------------------------------");
+    actual = nuevos->inicio;
+    int fila_nuevos = 5; 
+    while (actual != NULL) {
+        User *user = uc_get_user(uc, actual->UID);
+        char str[200];
+        pcb_as_str(actual, str, sizeof(str), user); 
+        mvwprintw(process, fila_nuevos, 2, "%s", str);
+        actual = actual->sig;
+        fila++;
+    }
 
     int fila_terminados = fila;
     clear_window_part(process, fila_terminados, 2, 18 - fila_terminados, 76);
@@ -916,7 +924,7 @@ main(void) {
         // Ejecutar procesos
         ejecutarProcesos(&quantum);
         regwin_update();
-        counterWin();
+        //counterWin();
 
         /**f
          * TODO: evitar que la ventana de procesos se actualice tan seguido
