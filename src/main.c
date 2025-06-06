@@ -590,14 +590,16 @@ void process_update(void) {
         fila++;
     }
 
-    mvwprintw(process, 6, 2, "------------------------------------------------|NUEVOS|-----------------------------------------------");
+    int fila_nuevos = fila;
+    clear_window_part(process, fila_nuevos, 2, 18 - fila_nuevos, 76);
+    mvwprintw(process, fila_nuevos, 2, "------------------------------------------------|NUEVOS|-----------------------------------------------");
     actual = nuevos->inicio;
-    int fila_nuevos = 5; 
+    fila = fila_nuevos + 1; 
     while (actual != NULL) {
         User *user = uc_get_user(uc, actual->UID);
         char str[200];
         pcb_as_str(actual, str, sizeof(str), user); 
-        mvwprintw(process, fila_nuevos, 2, "%s", str);
+        mvwprintw(process, fila, 2, "%s", str);
         actual = actual->sig;
         fila++;
     }
