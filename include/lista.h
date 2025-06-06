@@ -6,6 +6,7 @@
 #include <cpu.h>
 
 #define MAX_USER_STATS 256
+#define PBASE 60
 
 typedef struct fileTitle {
     char *fileName;

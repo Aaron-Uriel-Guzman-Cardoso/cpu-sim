@@ -232,23 +232,7 @@ void cargarProceso(Lista *listos, const char *fileName) {
  * \return No devuelve ningún valor (void).
  */
 void ejecutarProcesos(int32_t *quantum) {
-    // Intentar cargar procesos desde la lista 'nuevos' a la SWAP
-    if (nuevos->inicio != NULL) {
-        PCB *proceso_nuevo = listaExtraeInicio(nuevos);
-        if (swap_load_program1(proceso_nuevo, proceso_nuevo->fileName) == 0) {
-            // Proceso cargado correctamente, mover a `listos`
-            listaInsertarFinal(listos, proceso_nuevo);
-            msg_log(LOG_LEVEL_INFO, "Proceso movido de Nuevos a Listos.\n");
-            process_update();
-            tms_disp_update();
-            swap_disp_update();
-        } else {
-            // No se pudo cargar, devolver el proceso a `nuevos`
-            listaInsertarFinal(nuevos, proceso_nuevo);
-            msg_log(LOG_LEVEL_WARN, "No hay espacio en SWAP para el proceso. Permanece en Nuevos.\n");
-        }
-        
-    }
+    
 
     // Si no hay proceso en ejecución y hay procesos en listos, mover el proceso con menor prioridad a Ejecución
     if (ejecucion->inicio == NULL && listos->inicio != NULL) {
@@ -320,6 +304,45 @@ void ejecutarProcesos(int32_t *quantum) {
                 swap_free_frames(finished);
                 tms_disp_update();
                 *quantum = 0;
+
+                /*
+                 * Al eliminar un proceso del swap, intentamos cargar uno nuevo
+                 * de entre todos en el swap
+                 * Nota: Esto puede hacer que procesos muy grandes nunca entren
+                 *       a la memoria swap porque está llena de procesos
+                 *       pequeños, es necesario aclarar como hacer esto con el
+                 *       profesor.
+                 */
+                if (nuevos->inicio) {
+                    PCB *candidato = nuevos->inicio;
+                    do {
+                        if (swap_load_program1(candidato, candidato->fileName) == 0) {
+                            // Proceso cargado correctamente, mover a `listos`
+                            listaInsertarFinal(listos, candidato);
+                            char buffer[300];
+                            snprintf(buffer, sizeof(buffer), "Proceso %d cargado desde SWAP: %s\n",
+                                     candidato->PID, candidato->fileName);
+                            msg_log(LOG_LEVEL_INFO, buffer);
+                            listaExtraeInicio(nuevos);
+                            process_update();
+                            tms_disp_update();
+                            swap_disp_update();
+                            break;
+                        }
+                    } while ((candidato = candidato->sig));
+
+                    User *user;
+                    if (!uc_user_exists(uc, candidato->UID)) {
+                        user = crearUsuario(candidato->UID);
+                        user->process_counter = 0;
+                        uc_alloc_user(uc, user);
+                    } else {
+                        user = uc_get_user(uc, candidato->UID);
+                    }
+                    user->process_counter += 1;
+                    
+                }
+
                 cpu_reset(cpu);
                 process_update();
                 return; // Salir después de manejar el evento de terminación
@@ -730,22 +753,6 @@ prompt_handle_cmd(struct cmd *cmd)
                     return -1;
                 }
 
-                /*User *user_new = crearUsuario(uid);
-
-                if (!uc_user_exists(uc, uid))
-                {
-                    uc_alloc_user(uc, user_new);
-                }*/
-               
-                User *user_new;
-                if (!uc_user_exists(uc, uid)) {
-                    user_new = crearUsuario(uid);
-                    user_new->process_counter = 0;
-                    uc_alloc_user(uc, user_new);
-                } else {
-                    user_new = uc_get_user(uc, uid);
-                }
-
                 char mensaje[300];
                 snprintf(mensaje, sizeof(mensaje), "Cargando archivo: %s\n", cmd->arg1);
                 msg_log(LOG_LEVEL_INFO, mensaje);
@@ -777,8 +784,8 @@ prompt_handle_cmd(struct cmd *cmd)
                     break;
                 case 0:
                     if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
+
                         listaInsertarFinal(listos, nuevo_proceso);
-                        user_new -> process_counter += 1;
                         msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
                         tms_disp_update();  
                         swap_disp_update();

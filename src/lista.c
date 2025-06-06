@@ -12,8 +12,6 @@
 #include <lista.h>
 #include <cpu.h>
 
-#define MAX_USER_STATS 256
-
 UserStats user_stats[MAX_USER_STATS];
 
 static int globalPID = 1;
@@ -46,7 +44,7 @@ PCB
             strcpy(nuevo_nodo->fileName, file_name);
             nuevo_nodo->sig = NULL;
             nuevo_nodo->UID = uid;
-            nuevo_nodo->P = 0; // Inicializar P a 0
+            nuevo_nodo->P = PBASE;
             nuevo_nodo->KCPU = 0.0; // Inicializar KCPU a 0.0
             nuevo_nodo->tmp = NULL; // Inicializar TMP como NULL
             nuevo_nodo->tmp_size = 0; // Inicializar tamaño de TMP a 0
@@ -195,6 +193,7 @@ User *crearUsuario(uint8_t uid) {
     if (user) {
         user->uid = uid;
         user->KCPUxU = 0.0;
+        user->process_counter = 0;
     }
     return user;
 }
