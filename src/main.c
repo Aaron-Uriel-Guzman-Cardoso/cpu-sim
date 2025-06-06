@@ -18,48 +18,15 @@
 #include <mmu.h>
 #include <swap_disp.h>
 #include <tms_disp.h>
+#include <prompt.h>
+#include <cmd.h>
 
 #include "../include/cpu.h"
 
-#define MAX_CMD_CHARS 50
-#define HISTORY_SIZE 3
 #define PBASE 60
 #define MAX_USER_STATS 256
 
 int user_stats_count = 0;
-
-#define TOTAL_MARCOS 4096  // Desde 000 hasta FFF
-#define MARCOS_VISIBLES 16 // Marcos visibles a la vez
-
-// Variables para controlar el scroll
-WINDOW *tms_win;
-//uint32_t tms_frames[TOTAL_MARCOS] = {0};
-int tms_scroll_offset = 0;
-
-struct cmd {
-    char name[MAX_CMD_CHARS];
-    char arg1[MAX_CMD_CHARS];
-    char arg2[MAX_CMD_CHARS];
-};
-
-#define MAX_BUFLEN 120
-
-struct cmd_history {
-    char history[HISTORY_SIZE][MAX_BUFLEN];
-    int current;
-    int size;
-};
-
-struct prompt {
-    char buf[120];
-    size_t buflen;
-    WINDOW *win;
-    struct cmd_history hist;
-    int hist_index;
-    struct cmd *cmd;
-    bool typed_enter;
-} *prompt;
-
 
 /*struct os {
     uint32_t tms[MAX_AVAILABLE_FRAMES];
@@ -69,6 +36,7 @@ Lista *listos, *ejecucion, *terminados, *nuevos;
 WINDOW *reg;
 WINDOW *process;
 WINDOW *counter;
+WINDOW *tui_input; /* Usada para manejar toda entrada recibida*/
 struct cpu *cpu; /* Tendremos una única CPU en el simulador */
 struct timespec cpu_period = { 0, 500000000 }; /* Frecuencia de ejecucón de la cpu */ 
 
@@ -101,45 +69,6 @@ double W = 0.0; // Peso de la CPU
 }*/
 
 void process_update();
-
-/**
- * \brief Decodifica una cadena de texto en una estructura de comando.
- *
- * Esta función toma una cadena de texto (`buf`) que representa una instrucción,
- * la divide en componentes (nombre del comando y argumentos), y la almacena en
- * una estructura
- *
- * \param buf Cadena de texto que contiene la instrucción a decodificar.
- *
- * \return Retorna un puntero a la estructura `cmd` que contiene la instrucción decodificada.
- *         Retorna `NULL` si no se pudo asignar memoria para la estructura.
- */
-struct cmd *
-instruction_decode(const char *buf)
-{
-    struct cmd *inst = malloc(sizeof(*inst));
-    if (inst) {
-        //inst->name[0] = '\0';
-        //inst->arg1[0] = '\0';
-        //inst->arg2[0] = '\0';
-
-        memset(inst->name, 0, sizeof(inst->name));
-        memset(inst->arg1, 0, sizeof(inst->arg1));
-        memset(inst->arg2, 0, sizeof(inst->arg2));
-
-        sscanf(buf, "%s %s %s", inst->name, inst->arg1, inst->arg2);
-        for(size_t i = 0; inst->name[i] != '\0'; i += 1) {
-            inst->name[i] = toupper(inst->name[i]);
-        }
-        for(size_t i = 0; inst->arg1[i] != '\0'; i += 1) {
-            inst->arg1[i] = toupper(inst->arg1[i]);
-        }
-        for(size_t i = 0; inst->arg2[i] != '\0'; i += 1) {
-            inst->arg2[i] = toupper(inst->arg2[i]);
-        }
-    }
-    return inst;
-}
 
 /**
  * \brief Actualiza la ventana de registros de la CPU.
@@ -187,91 +116,15 @@ regwin_update(void)
     return 0;
 }
 
-/**
- * \brief Limpia la pantalla de línea de comandos, eliminando también el
- *        historial
- */
 void
-prompt_clear()
+tui_input_handler_init(void)
 {
-    clear_window_part(prompt->win, 1, 1, 5, 78);
-    prompt->buf[0] = '\0';
-    prompt->buflen = 0;
-    prompt->hist_index = 0;
-    /**
-     * TODO: borrar el historial al reiniciar la línea de comandos
-     */
-    wrefresh(prompt->win);
-}
-
-void
-prompt_insert_char(char ch)
-{
-    if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'))) {
-        return;
-    }
-    prompt->buf[prompt->buflen] = ch;
-    prompt->buf[prompt->buflen + 1] = 0;
-    prompt->buflen += 1;
-}
-
-void
-prompt_backspace(void)
-{
-    if (prompt->buflen > 0) {
-        prompt->buflen -= 1;
-        prompt->buf[prompt->buflen] = '\0';
-    }
-    clear_window_part(prompt->win, 5, 1, 1, 78);
-    mvwprintw(prompt->win, 5, 1, "$ %s", prompt->buf);
-    wrefresh(prompt->win);
-}
-
-void
-prompt_enter(void)
-{
-    prompt->typed_enter = true;
-    clear_window_part(prompt->win, 1, 1, 5, 78);
-    strncpy(prompt->hist.history[prompt->hist.current], prompt->buf, prompt->buflen);
-    prompt->buf[0] = prompt->buflen = 0;
-    prompt->hist.current = (prompt->hist.current + 1) % HISTORY_SIZE;
-    if (prompt->hist.size < HISTORY_SIZE) {
-        prompt->hist.size++;
-    }
-    prompt->hist_index = prompt->hist.current;
-
-    prompt->cmd = instruction_decode(prompt->buf);
-}
-
-
-struct cmd *
-prompt_get_cmd()
-{
-    return prompt->cmd;
-}
-
-/**
- * \brief Realiza una actualización del estado del prompt de forma que se
- *        refleja en la TUI
- * 
- * Esta función es requerida cuando algo en el estado interno del prompt
- * fue cambiado y se requiere de una impresión actualizada del prompt.
- * Usualmente esto sucede cuando te mueves por el historial. 
- */
-void
-prompt_update(void)
-{
-    prompt->buflen = strnlen(prompt->hist.history[prompt->hist_index], MAX_BUFLEN);
-    snprintf(prompt->buf, prompt->buflen, "%s",
-    prompt->hist.history[prompt->hist_index]);
-    clear_window_part(prompt->win, 5, 1, 1, 78);
-    for (int i = 0; i < prompt->hist.size; i++) {
-        size_t index = 
-            (prompt->hist.current - 1 - i + HISTORY_SIZE) % HISTORY_SIZE;
-        mvwprintw(prompt->win, 4 - i, 1, "$ %s", prompt->hist.history[index]);
-    }
-    wrefresh(prompt->win);
-    mvwprintw(prompt->win, 5, 1, "$ %s", prompt->buf);
+    tui_input = newwin(1, 1, 900, 900);
+    scrollok(tui_input, TRUE);
+    keypad(tui_input, TRUE);
+    nodelay(tui_input, TRUE);
+    wmove(tui_input, 0, 0);
+    wrefresh(tui_input);
 }
 
 /**
@@ -286,17 +139,18 @@ prompt_update(void)
 */
 bool
 tui_input_handler()
-{   
-    char in_ch = wgetch(prompt->win);
+{
+    char in_ch = wgetch(tui_input);
     if (in_ch == ERR) {
-        return false; // No hay entrada
+        return false;
     }
     if (in_ch == '\n') { 
         prompt_enter();
-    } else if (in_ch == KEY_BACKSPACE || in_ch == 127 || in_ch == 8) {
+    } else if (in_ch == KEY_BACKSPACE || in_ch == 127 || in_ch == 8 ||
+               in_ch == 7) {
         prompt_backspace();
     }
-    else if (in_ch == KEY_F(5)) {
+    else if (in_ch == KEY_F(5) || in_ch == '\r') {
         /* Por implementar */
     }
     else if (in_ch == KEY_F(6)) {
@@ -309,16 +163,9 @@ tui_input_handler()
         swap_disp_pg_dn();
     }
     else if (in_ch == KEY_UP) {
-        if (prompt->hist.size > 0) {
-            prompt->hist_index = 
-                (prompt->hist_index - 1 + HISTORY_SIZE) % HISTORY_SIZE;
-            prompt_update();
-        }
+        prompt_up();
     } else if (in_ch == KEY_DOWN) {
-        if (prompt->hist.size > 0) {
-            prompt->hist_index = (prompt->hist_index + 1) % HISTORY_SIZE;
-            prompt_update();
-        }
+        prompt_dn();
     } else if (in_ch == KEY_LEFT) {
         cpu_set_freq(cpu, cpu_get_freq(cpu) / 2);
         regwin_update();
@@ -332,191 +179,6 @@ tui_input_handler()
 }
 
 struct user_control *uc;
-
-
-/**
- * \brief Evalúa e interpreta un comando ingresado por el usuario.
- *
- * Esta función evalúa un comando ingresado por el usuario y ejecuta la acción correspondiente,
- * como salir del programa o cargar un archivo en el PCB. Dependiendo del comando, realiza
- * diferentes operaciones y retorna un código de estado.
- *
- * \param cmd Puntero a la estructura que contiene el comando leído.
- *
- * \return Retorna:
- *   - 0 en caso de éxito.
- *   - 1 en caso de error.
- *   - -1 si el comando no es reconocido.
- *
- * \details
- * La función evalúa el comando ingresado y realiza la acción correspondiente:
- * - Si el comando es "EXIT" o "SALIR", cierra el programa.
- * - Si el comando es "LOAD", intenta cargar el archivo especificado en el PCB.
- * - Si el comando es nulo o no reconocido, muestra un mensaje de error en la ventana de mensajes.
- */
-int32_t 
-cmd_execute(struct cmd *cmd) {
-    if (strncmp(cmd->name, "F5", 2) == 0) {
-        tms_disp_pg_dn();
-    } 
-    else if (strncmp(cmd->name, "F6", 2) == 0) {
-        tms_disp_pg_up();
-    }
-    else if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
-        liberarLista(listos);
-        liberarLista(ejecucion);
-        liberarLista(terminados);
-        msg_log(LOG_LEVEL_INFO, "Saliendo del programa...\n");
-        endwin();
-        printf("\n");
-        swap_close();
-        exit(0);
-    }
-    else if (strncmp(cmd->name, "LOAD", 4) == 0) {
-        if (cmd->arg1[0] == '\0') {
-            msg_log(LOG_LEVEL_ERROR, "Falta el nombre del archivo\n");
-            return 1;
-        } else {
-            uint8_t uid = 0;
-            if (cmd->arg2[0] != '\0')
-            {
-                uid = atoi(cmd->arg2);
-                if (uid > UINT8_MAX) {
-                    msg_log(LOG_LEVEL_ERROR, "ID de usuario inválido");
-                    return -1;
-                }
-
-                /*User *user_new = crearUsuario(uid);
-
-                if (!uc_user_exists(uc, uid))
-                {
-                    uc_alloc_user(uc, user_new);
-                }*/
-               
-                User *user_new;
-                if (!uc_user_exists(uc, uid)) {
-                    user_new = crearUsuario(uid);
-                    user_new->process_counter = 0;
-                    uc_alloc_user(uc, user_new);
-                } else {
-                    user_new = uc_get_user(uc, uid);
-                }
-
-                char mensaje[300];
-                snprintf(mensaje, sizeof(mensaje), "Cargando archivo: %s\n", cmd->arg1);
-                msg_log(LOG_LEVEL_INFO, mensaje);
-
-                // Verificar si el archivo existe antes de crear el proceso
-                FILE *archivo = fopen(cmd->arg1, "r");
-                if (archivo == NULL) {
-                    msg_log(LOG_LEVEL_ERROR, "Error: El archivo no existe o no se puede abrir.\n");
-                    return 1; 
-                }
-                fclose(archivo);
-
-                // Crear un nuevo proceso y lo agrega a la lista
-                PCB *nuevo_proceso = listaCreaNodo((struct cpu_context) { 0 }, cmd->arg1, uid);
-                nuevo_proceso->P = PBase;
-                nuevo_proceso->KCPU = 0;
-                //nuevo_proceso->KCPUxU = 0;
-                
-
-                switch(swap_load_program1(nuevo_proceso, cmd->arg1)) {
-                case 1:
-                    listaInsertarFinal(nuevos, nuevo_proceso);
-                    msg_log(LOG_LEVEL_INFO, "Proceso en espera de carga en SWAP.\n");
-                    break;
-                case -1:
-                    msg_log(LOG_LEVEL_ERROR, "Error: El programa es demasiado grande para la memoria SWAP.\n");
-                    free(nuevo_proceso);
-                    return 1;
-                    break;
-                case 0:
-                    if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
-                        listaInsertarFinal(listos, nuevo_proceso);
-                        user_new -> process_counter += 1;
-                        msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
-                        tms_disp_update(tms_win, tms_scroll_offset);  
-                    }
-                    break;
-                case 2:
-                    listaInsertarFinal(listos, nuevo_proceso);
-                    msg_log(LOG_LEVEL_INFO, "Proceso hermano guardado.\n");
-                    break;
-                }  
-                process_update();
-            }
-            else
-            {
-                msg_log(LOG_LEVEL_ERROR, "Falta el ID de usuario");
-                return -1;
-            }
-            
-        }
-    }
-    else if (strncmp(cmd->name, "KILL", 4) == 0) {
-        if (cmd->arg1[0] == '\0') {
-            msg_log(LOG_LEVEL_ERROR, "Falta el PID del proceso a eliminar.\n");
-            return 1;
-        } else {
-            int pid = atoi(cmd->arg1);
-            PCB *proceso = listaBuscarPID(listos, pid);
-
-            if ((proceso = listaExtraePID(listos, pid)) != NULL) {
-                proceso->context = cpu_dump_context(cpu);
-                listaInsertarFinal(terminados, proceso);
-
-                User *user = uc_get_user(uc, proceso->UID);
-                if (user) {
-                    assert(user->process_counter > 0);
-                    user->process_counter -= 1;
-                    if (user->process_counter == 0) {
-                        update_user_stats(user->uid, user->KCPUxU);
-                        uc_dealloc_user(uc, user->uid);
-                    }
-                }
-
-                char mensaje[300];
-                snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
-                msg_log(LOG_LEVEL_INFO, mensaje);
-                process_update();
-            } else if ((proceso = listaExtraePID(ejecucion, pid)) != NULL) {
-                proceso->context = cpu_dump_context(cpu);
-                listaInsertarFinal(terminados, proceso);
-
-                User *user = uc_get_user(uc, proceso->UID);
-                if (user) {
-                    assert(user->process_counter > 0);
-                    user->process_counter -= 1;
-                    if (user->process_counter == 0) {
-                        update_user_stats(user->uid, user->KCPUxU);
-                        uc_dealloc_user(uc, user->uid);
-                    }
-                }
-
-                char mensaje[300];
-                snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
-                msg_log(LOG_LEVEL_INFO, mensaje);
-                process_update();
-            } else {
-                char mensaje[300];
-                snprintf(mensaje, sizeof(mensaje), "Error: No se pudo eliminar el proceso con PID %d.\n", pid);
-                msg_log(LOG_LEVEL_ERROR, mensaje);
-                return 1;
-            }
-            char mensaje[300];
-            snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
-            msg_log(LOG_LEVEL_INFO, mensaje);
-            process_update();
-        }
-    }
-    else { 
-        msg_log(LOG_LEVEL_ERROR, "Comando nulo.");
-        return -1;
-    }
-
-    return 0;
-}
 
 /**
  * \brief Carga un proceso en la lista de procesos listos.
@@ -580,7 +242,7 @@ void ejecutarProcesos(int32_t *quantum) {
             listaInsertarFinal(nuevos, proceso_nuevo);
             msg_log(LOG_LEVEL_WARN, "No hay espacio en SWAP para el proceso. Permanece en Nuevos.\n");
         }
-        tms_disp_update(tms_win, tms_scroll_offset);
+        tms_disp_update();
     }
 
     // Si no hay proceso en ejecución y hay procesos en listos, mover el proceso con menor prioridad a Ejecución
@@ -651,7 +313,7 @@ void ejecutarProcesos(int32_t *quantum) {
 
                 listaInsertarFinal(terminados, finished);
                 swap_free_frames(finished);
-                tms_disp_update(tms_win, tms_scroll_offset);
+                tms_disp_update();
                 *quantum = 0;
                 cpu_reset(cpu);
                 process_update();
@@ -839,7 +501,7 @@ process_init(void)
  *
  * \return No devuelve ningún valor (void).
  */
-void process_update() {
+void process_update(void) {
     werase(process);
     box(process, 0, 0);
 
@@ -1008,6 +670,185 @@ os_get_proc(uint16_t pid)
 }
 
 /**
+ * \brief Evalúa e interpreta un comando ingresado por el usuario.
+ *
+ * Esta función evalúa un comando ingresado por el usuario y ejecuta la acción correspondiente,
+ * como salir del programa o cargar un archivo en el PCB. Dependiendo del comando, realiza
+ * diferentes operaciones y retorna un código de estado.
+ *
+ * \param cmd Puntero a la estructura que contiene el comando leído.
+ *
+ * \return Retorna:
+ *   - 0 en caso de éxito.
+ *   - 1 en caso de error.
+ *   - -1 si el comando no es reconocido.
+ *
+ * \details
+ * La función evalúa el comando ingresado y realiza la acción correspondiente:
+ * - Si el comando es "EXIT" o "SALIR", cierra el programa.
+ * - Si el comando es "LOAD", intenta cargar el archivo especificado en el PCB.
+ * - Si el comando es nulo o no reconocido, muestra un mensaje de error en la ventana de mensajes.
+ */
+int32_t 
+prompt_handle_cmd(struct cmd *cmd)
+{
+    if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
+        liberarLista(listos);
+        liberarLista(ejecucion);
+        liberarLista(terminados);
+        msg_log(LOG_LEVEL_INFO, "Saliendo del programa...\n");
+        endwin();
+        printf("\n");
+        swap_close();
+        exit(0);
+    }
+    else if (strncmp(cmd->name, "LOAD", 4) == 0) {
+        if (cmd->arg1[0] == '\0') {
+            msg_log(LOG_LEVEL_ERROR, "Falta el nombre del archivo\n");
+            return 1;
+        } else {
+            uint8_t uid = 0;
+            if (cmd->arg2[0] != '\0')
+            {
+                uid = atoi(cmd->arg2);
+                if (uid > UINT8_MAX) {
+                    msg_log(LOG_LEVEL_ERROR, "ID de usuario inválido");
+                    return -1;
+                }
+
+                /*User *user_new = crearUsuario(uid);
+
+                if (!uc_user_exists(uc, uid))
+                {
+                    uc_alloc_user(uc, user_new);
+                }*/
+               
+                User *user_new;
+                if (!uc_user_exists(uc, uid)) {
+                    user_new = crearUsuario(uid);
+                    user_new->process_counter = 0;
+                    uc_alloc_user(uc, user_new);
+                } else {
+                    user_new = uc_get_user(uc, uid);
+                }
+
+                char mensaje[300];
+                snprintf(mensaje, sizeof(mensaje), "Cargando archivo: %s\n", cmd->arg1);
+                msg_log(LOG_LEVEL_INFO, mensaje);
+
+                // Verificar si el archivo existe antes de crear el proceso
+                FILE *archivo = fopen(cmd->arg1, "r");
+                if (archivo == NULL) {
+                    msg_log(LOG_LEVEL_ERROR, "Error: El archivo no existe o no se puede abrir.\n");
+                    return 1; 
+                }
+                fclose(archivo);
+
+                // Crear un nuevo proceso y lo agrega a la lista
+                PCB *nuevo_proceso = listaCreaNodo((struct cpu_context) { 0 }, cmd->arg1, uid);
+                nuevo_proceso->P = PBase;
+                nuevo_proceso->KCPU = 0;
+                //nuevo_proceso->KCPUxU = 0;
+                
+
+                switch(swap_load_program1(nuevo_proceso, cmd->arg1)) {
+                case 1:
+                    listaInsertarFinal(nuevos, nuevo_proceso);
+                    msg_log(LOG_LEVEL_INFO, "Proceso en espera de carga en SWAP.\n");
+                    break;
+                case -1:
+                    msg_log(LOG_LEVEL_ERROR, "Error: El programa es demasiado grande para la memoria SWAP.\n");
+                    free(nuevo_proceso);
+                    return 1;
+                    break;
+                case 0:
+                    if (nuevo_proceso != NULL && nuevo_proceso->programa != NULL) {
+                        listaInsertarFinal(listos, nuevo_proceso);
+                        user_new -> process_counter += 1;
+                        msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
+                        tms_disp_update();  
+                    }
+                    break;
+                case 2:
+                    listaInsertarFinal(listos, nuevo_proceso);
+                    msg_log(LOG_LEVEL_INFO, "Proceso hermano guardado.\n");
+                    break;
+                }  
+                process_update();
+            }
+            else
+            {
+                msg_log(LOG_LEVEL_ERROR, "Falta el ID de usuario");
+                return -1;
+            }
+            
+        }
+    }
+    else if (strncmp(cmd->name, "KILL", 4) == 0) {
+        if (cmd->arg1[0] == '\0') {
+            msg_log(LOG_LEVEL_ERROR, "Falta el PID del proceso a eliminar.\n");
+            return 1;
+        } else {
+            int pid = atoi(cmd->arg1);
+            PCB *proceso = listaBuscarPID(listos, pid);
+
+            if ((proceso = listaExtraePID(listos, pid)) != NULL) {
+                proceso->context = cpu_dump_context(cpu);
+                listaInsertarFinal(terminados, proceso);
+
+                User *user = uc_get_user(uc, proceso->UID);
+                if (user) {
+                    assert(user->process_counter > 0);
+                    user->process_counter -= 1;
+                    if (user->process_counter == 0) {
+                        update_user_stats(user->uid, user->KCPUxU);
+                        uc_dealloc_user(uc, user->uid);
+                    }
+                }
+
+                char mensaje[300];
+                snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
+                msg_log(LOG_LEVEL_INFO, mensaje);
+                process_update();
+            } else if ((proceso = listaExtraePID(ejecucion, pid)) != NULL) {
+                proceso->context = cpu_dump_context(cpu);
+                listaInsertarFinal(terminados, proceso);
+
+                User *user = uc_get_user(uc, proceso->UID);
+                if (user) {
+                    assert(user->process_counter > 0);
+                    user->process_counter -= 1;
+                    if (user->process_counter == 0) {
+                        update_user_stats(user->uid, user->KCPUxU);
+                        uc_dealloc_user(uc, user->uid);
+                    }
+                }
+
+                char mensaje[300];
+                snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
+                msg_log(LOG_LEVEL_INFO, mensaje);
+                process_update();
+            } else {
+                char mensaje[300];
+                snprintf(mensaje, sizeof(mensaje), "Error: No se pudo eliminar el proceso con PID %d.\n", pid);
+                msg_log(LOG_LEVEL_ERROR, mensaje);
+                return 1;
+            }
+            char mensaje[300];
+            snprintf(mensaje, sizeof(mensaje), "Proceso eliminado: %d\n", pid);
+            msg_log(LOG_LEVEL_INFO, mensaje);
+            process_update();
+        }
+    }
+    else { 
+        msg_log(LOG_LEVEL_ERROR, "Comando nulo.");
+        return -1;
+    }
+
+    return 0;
+}
+
+/**
  * \brief Función principal del programa.
  *
  * Esta función inicializa la interfaz gráfica, la CPU y las listas de procesos.
@@ -1019,47 +860,26 @@ os_get_proc(uint16_t pid)
 int 
 main(void) {
     cpu = cpu_new();
+    assert(cpu);
+    swap_init();
+    process_init();
+
     initscr();
+    raw();
     noecho();
     cbreak();
     curs_set(1);
-
-    msg_init();
-    process_init();
-    swap_init();
-    swap_disp_init();
-
-    keypad(stdscr, TRUE);
-
-    swap_disp_init();
-    tms_disp_init();
+    
+    tui_input_handler_init();
     reg = newwin(7, 80, 10, 0);
     box(reg, 0, 0);
     wrefresh(reg);
-    prompt->win = newwin(7, 80, 17, 0);
-    box(prompt->win, 0, 0);
-    //counter = newwin(7, 80, 24, 0);
-    //box(counter, 0, 0);
-    //wrefresh(counter);
-
-    //inicializar la ventana de TMS
-    tms_win = newwin(19, 16, 24, 0);
-    tms_disp_init(tms_win);
-    //tms_assign_frame(1, 1); //Asignar marco
-    //tms_free_frame(1); //Liberar marco
-    tms_disp_update(tms_win, tms_scroll_offset);
-
-    //inicializar la ventan del SWAP
-    //Pendiente
-
-    wrefresh(prompt->win);
-    nodelay(prompt->win, TRUE); 
-    keypad(prompt->win, TRUE);
-    prompt->hist.current = 0;
-    prompt->hist.size = 0;
-    prompt->hist_index = 0;
-    mvwprintw(prompt->win, 0, 35, "|Prompt|");
     regwin_update();
+
+    msg_init();
+    prompt_init();
+    swap_disp_init();
+    tms_disp_init();
 
     uc = malloc(sizeof(*uc));
     if (!uc) {
@@ -1074,16 +894,18 @@ main(void) {
     // Inicializar el quantum
     int quantum = 0;
 
+    process_update();
+
+
     while (true) {
         tui_input_handler();
-        if (prompt->typed_enter) {
-            prompt->typed_enter = false; // Reiniciar el estado de enter
+        if (prompt_valid_cmd_is_entered()) {
             struct cmd *cmd = prompt_get_cmd();
             if (cmd == NULL) {
                 msg_log(LOG_LEVEL_ERROR, "Comando nulo.\n");
                 continue; // No hacer nada si el comando es nulo
             }
-            int32_t result = cmd_execute(cmd);
+            int32_t result = prompt_handle_cmd(cmd);
         }
 
         // Ejecutar procesos
@@ -1106,7 +928,6 @@ main(void) {
         }*/
 
         wrefresh(counter);
-        wrefresh(prompt->win);
         wrefresh(process);
         /*
          * La lógica del bucle principal se ejecuta cada 33 ms

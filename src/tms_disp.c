@@ -18,7 +18,7 @@ struct tms_disp {
  * Esta función crea una nueva ventana para mostrar la Tabla de Memoria de Segmentos (TMS),
  * que muestra los marcos de memoria y sus respectivos PIDs asignados.
  */
-void tms_disp_init() {
+void tms_disp_init(void) {
     tmp_disp.win = newwin(20, 16, 24, 0);
     tmp_disp.scroll_offset = 0;
     
@@ -37,7 +37,7 @@ void tms_disp_init() {
  * de memoria, mostrando el PID asignado a cada marco.
  */
 void
-tms_disp_update()
+tms_disp_update(void)
 {
     werase(tmp_disp.win);
     box(tmp_disp.win, 0, 0);
@@ -55,7 +55,7 @@ tms_disp_update()
 }
 
 void
-tms_disp_pg_dn()
+tms_disp_pg_dn(void)
 {
     if (tmp_disp.scroll_offset + FRAME_SIZE < MAX_FRAMES) {
         tmp_disp.scroll_offset += SCROLL_UNIT;
@@ -64,7 +64,7 @@ tms_disp_pg_dn()
 }
 
 void
-tms_disp_pg_up()
+tms_disp_pg_up(void)
 {
     if (tmp_disp.scroll_offset - FRAME_SIZE >= 0) {
         tmp_disp.scroll_offset -= SCROLL_UNIT;

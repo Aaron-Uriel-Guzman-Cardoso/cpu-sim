@@ -19,7 +19,6 @@ enum op op_from_str(const char *str, bool is_immediate);
  * \details Analiza la cadena de entrada, extrae el nombre de la operación y los argumentos,
  *         y los convierte en una estructura de instrucción válida.
  */
-
 struct inst *
 inst_from_str(const char *buf)
 {
