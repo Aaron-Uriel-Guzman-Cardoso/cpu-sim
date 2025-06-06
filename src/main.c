@@ -116,6 +116,16 @@ regwin_update(void)
     return 0;
 }
 
+/**
+ *  
+ * \brief Inicializa la ventana de registros de la CPU.
+ *
+ * Esta función crea una nueva ventana para mostrar los registros de la CPU y
+ * configura sus propiedades iniciales.
+ *
+ * \return Retorna 0 si la ventana se inicializó correctamente.
+ */
+
 void
 tui_input_handler_init(void)
 {
@@ -392,14 +402,15 @@ void ejecutarProcesos(int32_t *quantum) {
     }
 }
 
+/*
 void counterWin(){
 
     clear_window_part(counter, 2, 2, 1, 76); // Clear Ejecución line
     clear_window_part(counter, 3, 2, 1, 76); // Clear Listos line
     clear_window_part(counter, 4, 2, 1, 76); // Clear Terminados line
 
-    /*fileTitle *name;
-    name = names->inicio;*/
+    //fileTitle *name;
+    //name = names->inicio;
 
     int count = 0;
     PCB* nodo;
@@ -409,7 +420,7 @@ void counterWin(){
     }
     else{
         mvwprintw(counter, 2, 2, "Ejecución: %s", nodo->fileName);
-        /*if (name == NULL){
+        //if (name == NULL){
             name->fileName = nodo->fileName;
             names->inicio = name;
             names->fin = name;
@@ -420,7 +431,7 @@ void counterWin(){
             name = name->next;
             name->fileName = nodo->fileName;
             names->fin = name;
-        }*/
+        }//
     }
 
     PCB* nodo2;
@@ -465,6 +476,7 @@ void counterWin(){
 
     wrefresh(counter);
 }
+*/
 
 /**
  * \brief Inicializa la ventana de visualización de procesos.
@@ -503,6 +515,7 @@ process_init(void)
  *
  * \param ejecucion Puntero a la lista de procesos en ejecución.
  * \param listos Puntero a la lista de procesos listos para ejecutarse.
+ * \param nuevos Puntero a la lista de procesos nuevos a la espera de pasar a listos.
  * \param terminados Puntero a la lista de procesos terminados.
  *
  * \return No devuelve ningún valor (void).
@@ -645,6 +658,16 @@ os_get_curr_pid()
     return (ejecucion && ejecucion->inicio)? ejecucion->inicio->PID : 0;
 }
 
+/**
+ * \brief Busca un "hermano" de un proceso dado.
+ *
+ * Un hermano es un proceso que pertenece al mismo usuario (UID) y ejecuta el mismo archivo (fileName),
+ * pero no es el mismo proceso (diferente dirección de PCB).
+ * La función busca primero en la lista de procesos listos y luego en la lista de procesos en ejecución.
+ *
+ * \param pcb Puntero al proceso (PCB) del cual se busca un hermano.
+ * \return Puntero al primer hermano encontrado, o NULL si no existe.
+ */
 PCB *
 os_find_brother(PCB *pcb) {
     PCB *current = listos->inicio;
@@ -668,6 +691,15 @@ os_find_brother(PCB *pcb) {
     return NULL;
 }
 
+/**
+ * \brief Busca un proceso por su PID en las listas de listos y ejecución.
+ *
+ * La función busca un proceso cuyo identificador (PID) coincida con el dado.
+ * Primero busca en la lista de procesos listos, luego en la de ejecución.
+ *
+ * \param pid Identificador del proceso a buscar.
+ * \return Puntero al PCB del proceso si se encuentra, o NULL si no existe.
+ */
 struct PCB *
 os_get_proc(uint16_t pid)
 {

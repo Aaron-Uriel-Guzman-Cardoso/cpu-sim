@@ -14,7 +14,12 @@ static FILE *swapfile = NULL;
 // Tabla de Mapa de Swap (TMS) global
 static FrameEntry swap_map[MAX_FRAMES];
 
-// Inicializar el sistema SWAP
+/**
+ * \brief Inicializa el sistema SWAP.
+ *
+ * Esta función crea o abre el archivo de swap, lo inicializa con ceros.
+ */
+
 void swap_init() {
     // Crear/abrir archivo SWAP
     swapfile = fopen("SWAP.bin", "w+b");
@@ -32,7 +37,11 @@ void swap_init() {
     }
 }
 
-// Cerrar el sistema SWAP
+/**
+ * \brief Cierra el sistema SWAP.
+ *
+ * Esta función cierra el archivo de swap si está abierto y libera el puntero global.
+ */
 void swap_close() {
     if (swapfile) {
         fclose(swapfile);
@@ -40,13 +49,25 @@ void swap_close() {
     }
 }
 
-// Calcular marcos necesarios para un programa
+/**
+ * \brief Calcula la cantidad de marcos necesarios para almacenar un programa.
+ *
+ * Dado el tamaño del programa en instrucciones, esta función determina cuántos
+ * marcos de memoria (frames) se requieren para almacenarlo completamente.
+ * Utiliza una división entera redondeando hacia arriba.
+ *
+ * \param program_size Número de instrucciones del programa.
+ * \return Número de marcos necesarios.
+ */
 int swap_calculate_frames(int program_size) {
     return (program_size + FRAME_SIZE - 1) / FRAME_SIZE;
 }
 
 /**
- * \brief Busca marcos libres para asignarselos a un proceso
+ * \brief Busca marcos libres para asignárselos a un proceso.
+ *
+ * Asigna marcos libres de swap al proceso pcb y los marca con su PID.
+ * Devuelve 0 si tuvo éxito, -1 si no hay suficientes marcos.
  */
 int swap_allocate_frames(PCB *pcb) {
     const int frames_needed = swap_calculate_frames(pcb->program_size);
@@ -66,7 +87,12 @@ int swap_allocate_frames(PCB *pcb) {
     return (pcb->tmp_size == frames_needed) ? 0 : -1;
 }
 
-// Liberar marcos de un proceso
+/**
+ * \brief Libera los marcos asignados a un proceso.
+ *
+ * Si el proceso tiene un hermano, reasigna los marcos a ese hermano.
+ * Si no, marca los marcos como libres.
+ */
 void swap_free_frames(PCB *pcb) {
     /**
      * TODO: Verificar y modificar el PID cuando el hermano original tenga que ser   
@@ -253,7 +279,13 @@ void swap_display_map(WINDOW *win) {
     wrefresh(win);
 }
 
-// Obtener cantidad de marcos libres
+/**
+ * \brief Obtiene la cantidad de marcos libres en la memoria SWAP.
+ *
+ * Recorre la tabla de marcos y cuenta cuántos tienen pid == -1 (libres).
+ *
+ * \return Número de marcos libres.
+ */
 int swap_get_free_frame_count() {
     int count = 0;
     for (int i = 0; i < MAX_FRAMES; i++) {
