@@ -7,12 +7,20 @@
 #define MAX_FRAMES_PER_PAGE 2
 #define MAX_PG MAX_FRAMES / MAX_FRAMES_PER_PAGE
 
+// Estructura que mantiene el estado de la visualización de la swap
 struct swap_disp_state {
     WINDOW *margin;
     WINDOW *win;
     uint16_t curr_pg;
 } swap_disp_state;
 
+/**
+ * \brief Inicializa la ventana de visualización de la swap.
+ *
+ * Crea una nueva ventana para mostrar el contenido de la swap, establece el número
+ * de página actual a 0 y dibuja un borde alrededor de la ventana. Luego, llama a
+ * `swap_disp_update()` para mostrar el contenido inicial.
+ */
 void
 swap_disp_init(void)
 {
@@ -26,6 +34,13 @@ swap_disp_init(void)
     swap_disp_update();
 }
 
+/**
+ * \brief Actualiza la visualización de la swap.
+ *
+ * Limpia la ventana de swap y muestra el contenido de los marcos de memoria
+ * correspondientes a la página actual. Cada página muestra un máximo de 2 marcos,
+ * con 16 instrucciones por marco.
+ */
 void
 swap_disp_update(void)
 {
@@ -52,6 +67,12 @@ swap_disp_update(void)
     wrefresh(swap_disp_state.win);
 }
 
+/**
+ * \brief Cambia a la página siguiente de la visualización de la swap.
+ *
+ * Si no está en la última página, avanza una página; si está en la última, regresa a la primera.
+ * Luego actualiza la visualización.
+ */
 void
 swap_disp_pg_dn(void)
 {
@@ -63,6 +84,12 @@ swap_disp_pg_dn(void)
     swap_disp_update();
 }
 
+/**
+ * \brief Cambia a la página anterior de la visualización de la swap.
+ *
+ * Si no está en la primera página, retrocede una página; si está en la primera, va a la última.
+ * Luego actualiza la visualización.
+ */
 void
 swap_disp_pg_up(void)
 {

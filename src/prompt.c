@@ -16,6 +16,7 @@ struct history {
     int size;
 };
 
+// Estructura que representa el estado del prompt de comandos en la TUI
 struct prompt {
     char buf[MAX_BUFLEN];
     size_t buflen;
@@ -25,8 +26,12 @@ struct prompt {
     struct cmd *cmd;
 } *prompt;
 
-
-
+/**
+ * \brief Inicializa la estructura y ventana del prompt.
+ *
+ * Reserva memoria para el prompt, inicializa sus campos y crea la ventana ncurses.
+ * Dibuja el borde, el título y actualiza la visualización inicial.
+ */
 void
 prompt_init(void)
 {
@@ -67,6 +72,11 @@ prompt_clear()
     wrefresh(prompt->win);
 }
 
+/**
+ * \brief Inserta un carácter en el buffer del prompt.
+ *
+ * Si no se ha alcanzado el límite, agrega el carácter al buffer y actualiza la pantalla.
+ */
 void
 prompt_insert_char(char ch)
 {
@@ -79,6 +89,11 @@ prompt_insert_char(char ch)
     prompt_update();
 }
 
+/**
+ * \brief Elimina el último carácter del buffer del prompt (backspace).
+ *
+ * Si el buffer no está vacío, elimina el último carácter y actualiza la pantalla.
+ */
 void
 prompt_backspace(void)
 {
@@ -89,6 +104,12 @@ prompt_backspace(void)
     prompt_update();
 }
 
+/**
+ * \brief Procesa la entrada cuando el usuario presiona Enter.
+ *
+ * Limpia la zona de comandos, guarda el comando en el historial,
+ * decodifica el comando, actualiza los índices y limpia el buffer.
+ */
 void
 prompt_enter(void)
 {
@@ -154,6 +175,12 @@ prompt_update(void)
     wrefresh(prompt->win);
 }
 
+/**
+ * \brief Navega hacia arriba en el historial de comandos del prompt.
+ *
+ * Si hay comandos en el historial, decrementa el índice del historial (de forma circular),
+ * copia el comando correspondiente al buffer del prompt y actualiza la pantalla.
+ */
 void
 prompt_up(void)
 {
@@ -167,6 +194,12 @@ prompt_up(void)
     }
 }
 
+/**
+ * \brief Navega hacia abajo en el historial de comandos del prompt.
+ *
+ * Si hay comandos en el historial, incrementa el índice del historial (de forma circular),
+ * copia el comando correspondiente al buffer del prompt y actualiza la pantalla.
+ */
 void
 prompt_dn(void)
 {
