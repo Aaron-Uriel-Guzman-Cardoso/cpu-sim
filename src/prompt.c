@@ -160,7 +160,7 @@ prompt_up(void)
     if (prompt->hist.size > 0) {
         prompt->hist_index = 
             (prompt->hist_index - 1 + PROMPT_HISTORY_SIZE) % PROMPT_HISTORY_SIZE;
-        prompt->buflen = strnlen(prompt->hist.raw_history[prompt->hist_index], MAX_BUFLEN);
+        prompt->buflen = strnlen(prompt->hist.raw_history[prompt->hist_index], MAX_BUFLEN) + 1;
         snprintf(prompt->buf, prompt->buflen, "%s",
                  prompt->hist.raw_history[prompt->hist_index]);
         prompt_update();
@@ -172,7 +172,7 @@ prompt_dn(void)
 {
     if (prompt->hist.size > 0) {
         prompt->hist_index = (prompt->hist_index + 1) % PROMPT_HISTORY_SIZE;
-        prompt->buflen = strnlen(prompt->hist.raw_history[prompt->hist_index], MAX_BUFLEN);
+        prompt->buflen = strnlen(prompt->hist.raw_history[prompt->hist_index], MAX_BUFLEN) + 1;
         snprintf(prompt->buf, prompt->buflen, "%s",
                  prompt->hist.raw_history[prompt->hist_index]);
         prompt_update();

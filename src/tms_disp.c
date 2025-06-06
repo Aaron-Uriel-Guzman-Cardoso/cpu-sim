@@ -57,7 +57,7 @@ tms_disp_update(void)
 void
 tms_disp_pg_dn(void)
 {
-    if (tmp_disp.scroll_offset + FRAME_SIZE < MAX_FRAMES) {
+    if (tmp_disp.scroll_offset + SCROLL_UNIT < MAX_FRAMES) {
         tmp_disp.scroll_offset += SCROLL_UNIT;
         tms_disp_update();
     }
@@ -66,7 +66,7 @@ tms_disp_pg_dn(void)
 void
 tms_disp_pg_up(void)
 {
-    if (tmp_disp.scroll_offset - FRAME_SIZE >= 0) {
+    if (tmp_disp.scroll_offset - SCROLL_UNIT >= 0) {
         tmp_disp.scroll_offset -= SCROLL_UNIT;
         tms_disp_update();
     }

@@ -141,6 +141,9 @@ bool
 tui_input_handler()
 {
     char in_ch = wgetch(tui_input);
+    char buffer[100];
+    snprintf(buffer, sizeof(buffer), "tui_input_handler: tecla %d", in_ch);
+    msg_log(LOG_LEVEL_INFO, buffer);
     if (in_ch == ERR) {
         return false;
     }
@@ -150,26 +153,26 @@ tui_input_handler()
                in_ch == 7) {
         prompt_backspace();
     }
-    else if (in_ch == KEY_F(5) || in_ch == '\r') {
-        /* Por implementar */
+    else if (in_ch == KEY_F(5) || in_ch == 13 || in_ch == '+') {
+        tms_disp_pg_up();
     }
-    else if (in_ch == KEY_F(6)) {
-        /* Por implementar*/
+    else if (in_ch == KEY_F(6) || in_ch == 14 || in_ch == '-') {
+        tms_disp_pg_dn();
     }
-    else if (in_ch == KEY_F(7)) {
+    else if (in_ch == KEY_F(7) || in_ch == 15 || in_ch == '*') {
         swap_disp_pg_up();
-    } 
-    else if (in_ch == KEY_F(8)) {
+    }
+    else if (in_ch == KEY_F(8) || in_ch == 16 || in_ch == '/') {
         swap_disp_pg_dn();
     }
-    else if (in_ch == KEY_UP) {
+    else if (in_ch == KEY_UP || in_ch == 3) {
         prompt_up();
-    } else if (in_ch == KEY_DOWN) {
+    } else if (in_ch == KEY_DOWN || in_ch == 2) {
         prompt_dn();
-    } else if (in_ch == KEY_LEFT) {
+    } else if (in_ch == KEY_LEFT || in_ch == 4) {
         cpu_set_freq(cpu, cpu_get_freq(cpu) / 2);
         regwin_update();
-    } else if (in_ch == KEY_RIGHT) {
+    } else if (in_ch == KEY_RIGHT || in_ch == 5) {
         cpu_set_freq(cpu, cpu_get_freq(cpu) * 2);
         regwin_update();
     }
@@ -237,12 +240,14 @@ void ejecutarProcesos(int32_t *quantum) {
             listaInsertarFinal(listos, proceso_nuevo);
             msg_log(LOG_LEVEL_INFO, "Proceso movido de Nuevos a Listos.\n");
             process_update();
+            tms_disp_update();
+            swap_disp_update();
         } else {
             // No se pudo cargar, devolver el proceso a `nuevos`
             listaInsertarFinal(nuevos, proceso_nuevo);
             msg_log(LOG_LEVEL_WARN, "No hay espacio en SWAP para el proceso. Permanece en Nuevos.\n");
         }
-        tms_disp_update();
+        
     }
 
     // Si no hay proceso en ejecución y hay procesos en listos, mover el proceso con menor prioridad a Ejecución
@@ -698,7 +703,6 @@ prompt_handle_cmd(struct cmd *cmd)
         liberarLista(terminados);
         msg_log(LOG_LEVEL_INFO, "Saliendo del programa...\n");
         endwin();
-        printf("\n");
         swap_close();
         exit(0);
     }
@@ -767,6 +771,7 @@ prompt_handle_cmd(struct cmd *cmd)
                         user_new -> process_counter += 1;
                         msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
                         tms_disp_update();  
+                        swap_disp_update();
                     }
                     break;
                 case 2:
