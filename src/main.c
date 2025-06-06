@@ -81,7 +81,7 @@ void process_update();
 int32_t
 regwin_update(void)
 {
-    clear_window_part(reg, 1, 1, 5, 78);
+    clear_window_part(reg, 1, 1, 5, 108);
     struct cpu_context context = cpu_dump_context(cpu);
     mvwprintw(reg, 2, 2, "AX: %ld", context.regs[REG_AX]);
     mvwprintw(reg, 3, 2, "BX: %ld", context.regs[REG_BX]);
@@ -95,26 +95,36 @@ regwin_update(void)
 
     if (ejecucion->inicio != NULL) {
         PCB *proceso = ejecucion->inicio;
-        mvwprintw(reg, 1, 36, "Proceso PID: %d", proceso->PID);
+        mvwprintw(reg, 1, 52, "Proceso PID: %d", proceso->PID);
 
         int max_lines = 7; // Espacio disponible para imprimir marcos
         int lines_used = 2; 
         for (int i = 0; i < proceso->tmp_size && lines_used < max_lines + 8; i++) {
-            mvwprintw(reg, lines_used, 36, "Marco %d -> SWAP Marco %03X", i, proceso->tmp[i]);
+            mvwprintw(reg, lines_used, 52, "Marco %d -> SWAP Marco %03X", i, proceso->tmp[i]);
             lines_used++;
         }
 
         if (lines_used == max_lines + 8) {
-            mvwprintw(reg, lines_used, 36, "... (más marcos no mostrados)");
+            mvwprintw(reg, lines_used, 52, "... (más marcos no mostrados)");
         }
     } else {
-        mvwprintw(reg, 1, 36, "No hay proceso en ejecución.");
+        mvwprintw(reg, 1, 52, "No hay proceso en ejecución.");
     }
 
 
     wrefresh(reg);
     return 0;
 }
+
+/**
+ *  
+ * \brief Inicializa la ventana de registros de la CPU.
+ *
+ * Esta función crea una nueva ventana para mostrar los registros de la CPU y
+ * configura sus propiedades iniciales.
+ *
+ * \return Retorna 0 si la ventana se inicializó correctamente.
+ */
 
 void
 tui_input_handler_init(void)
@@ -232,8 +242,6 @@ void cargarProceso(Lista *listos, const char *fileName) {
  * \return No devuelve ningún valor (void).
  */
 void ejecutarProcesos(int32_t *quantum) {
-    
-
     // Si no hay proceso en ejecución y hay procesos en listos, mover el proceso con menor prioridad a Ejecución
     if (ejecucion->inicio == NULL && listos->inicio != NULL) {
         PCB *proceso = listaExtraePrioridad(listos);
@@ -345,6 +353,28 @@ void ejecutarProcesos(int32_t *quantum) {
 
                 cpu_reset(cpu);
                 process_update();
+
+                // Mover procesos de Nuevos a Listos
+                while (nuevos->inicio != NULL) { 
+                PCB *proceso_nuevo = nuevos->inicio; 
+                if (swap_load_program1(proceso_nuevo, proceso_nuevo->fileName) == 0) {
+                    proceso_nuevo = listaExtraeInicio(nuevos); 
+                    listaInsertarFinal(listos, proceso_nuevo); 
+
+                    User *user_new = uc_get_user(uc, proceso_nuevo->UID);
+                    if (user_new) {
+                       user_new->process_counter += 1;
+                    }
+                    
+                    msg_log(LOG_LEVEL_INFO, "Proceso movido de Nuevos a Listos.\n");
+                    process_update();
+                    tms_disp_update();
+                } else {
+                    msg_log(LOG_LEVEL_WARN, "No hay espacio en SWAP para el proceso. Permanece en Nuevos.\n");
+                    break; 
+                }
+                }
+
                 return; // Salir después de manejar el evento de terminación
             }
 
@@ -411,14 +441,15 @@ void ejecutarProcesos(int32_t *quantum) {
     }
 }
 
+/*
 void counterWin(){
 
     clear_window_part(counter, 2, 2, 1, 76); // Clear Ejecución line
     clear_window_part(counter, 3, 2, 1, 76); // Clear Listos line
     clear_window_part(counter, 4, 2, 1, 76); // Clear Terminados line
 
-    /*fileTitle *name;
-    name = names->inicio;*/
+    //fileTitle *name;
+    //name = names->inicio;
 
     int count = 0;
     PCB* nodo;
@@ -428,7 +459,7 @@ void counterWin(){
     }
     else{
         mvwprintw(counter, 2, 2, "Ejecución: %s", nodo->fileName);
-        /*if (name == NULL){
+        //if (name == NULL){
             name->fileName = nodo->fileName;
             names->inicio = name;
             names->fin = name;
@@ -439,7 +470,7 @@ void counterWin(){
             name = name->next;
             name->fileName = nodo->fileName;
             names->fin = name;
-        }*/
+        }//
     }
 
     PCB* nodo2;
@@ -484,6 +515,7 @@ void counterWin(){
 
     wrefresh(counter);
 }
+*/
 
 /**
  * \brief Inicializa la ventana de visualización de procesos.
@@ -522,12 +554,13 @@ process_init(void)
  *
  * \param ejecucion Puntero a la lista de procesos en ejecución.
  * \param listos Puntero a la lista de procesos listos para ejecutarse.
+ * \param nuevos Puntero a la lista de procesos nuevos a la espera de pasar a listos.
  * \param terminados Puntero a la lista de procesos terminados.
  *
  * \return No devuelve ningún valor (void).
  */
 void process_update(void) {
-    process = newwin(24, 125, 0, 81);
+    process = newwin(44, 125, 0, 110);
     box(process, 0, 0);
     wrefresh(process);
 
@@ -613,17 +646,15 @@ void process_update(void) {
         fila++;
     }
 
-    int fila_nuevos = fila;
-    clear_window_part(process, fila_nuevos, 2, 18 - fila_nuevos, 76);
-    mvwprintw(process, fila_nuevos, 2, "------------------------------------------------|NUEVOS|-----------------------------------------------");
-    actual = nuevos->inicio;
-    fila = fila_nuevos + 1; 
-    while (actual != NULL) {
-        User *user = uc_get_user(uc, actual->UID);
+    mvwprintw(process, fila, 2, "--------------------------------------------------|NUEVOS|--------------------------------------------------");
+    PCB *nuevo = nuevos->inicio;
+    fila++;
+    while (nuevo != NULL) {
+        User *user = uc_get_user(uc, nuevo->UID);
         char str[200];
-        pcb_as_str(actual, str, sizeof(str), user); 
+        pcb_as_str(nuevo, str, sizeof(str), user); 
         mvwprintw(process, fila, 2, "%s", str);
-        actual = actual->sig;
+        nuevo = nuevo->sig;
         fila++;
     }
 
@@ -666,6 +697,16 @@ os_get_curr_pid()
     return (ejecucion && ejecucion->inicio)? ejecucion->inicio->PID : 0;
 }
 
+/**
+ * \brief Busca un "hermano" de un proceso dado.
+ *
+ * Un hermano es un proceso que pertenece al mismo usuario (UID) y ejecuta el mismo archivo (fileName),
+ * pero no es el mismo proceso (diferente dirección de PCB).
+ * La función busca primero en la lista de procesos listos y luego en la lista de procesos en ejecución.
+ *
+ * \param pcb Puntero al proceso (PCB) del cual se busca un hermano.
+ * \return Puntero al primer hermano encontrado, o NULL si no existe.
+ */
 PCB *
 os_find_brother(PCB *pcb) {
     PCB *current = listos->inicio;
@@ -689,6 +730,15 @@ os_find_brother(PCB *pcb) {
     return NULL;
 }
 
+/**
+ * \brief Busca un proceso por su PID en las listas de listos y ejecución.
+ *
+ * La función busca un proceso cuyo identificador (PID) coincida con el dado.
+ * Primero busca en la lista de procesos listos, luego en la de ejecución.
+ *
+ * \param pid Identificador del proceso a buscar.
+ * \return Puntero al PCB del proceso si se encuentra, o NULL si no existe.
+ */
 struct PCB *
 os_get_proc(uint16_t pid)
 {
@@ -903,7 +953,7 @@ main(void) {
     curs_set(1);
     
     tui_input_handler_init();
-    reg = newwin(7, 80, 10, 0);
+    reg = newwin(7, 110, 10, 0);
     box(reg, 0, 0);
     wrefresh(reg);
     regwin_update();
@@ -926,8 +976,7 @@ main(void) {
     // Inicializar el quantum
     int quantum = 0;
 
-    process_update();
-
+    //process_update();
 
     while (true) {
         tui_input_handler();

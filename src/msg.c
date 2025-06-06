@@ -18,7 +18,7 @@ msg_init(void)
      * Las coordenadas están hardcoded, no se me ocurre una buena forma de
      * hacer automático el cálculo de las dimensiones de las ventanas.
      */
-    msg = newwin(10, 80, 0, 0);
+    msg = newwin(10, 110, 0, 0);
     box(msg, 0, 0);
     wrefresh(msg);
     return 0;
