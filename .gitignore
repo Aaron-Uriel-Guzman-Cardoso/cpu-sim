@@ -6,3 +6,5 @@ Session.vim
 cpu-o
 PROG
 P_END
+SWAP.bin
+cpu-sim

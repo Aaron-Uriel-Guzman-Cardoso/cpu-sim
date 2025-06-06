@@ -16,6 +16,8 @@
 #include <os.h>
 #include <swap.h>
 #include <mmu.h>
+#include <swap_disp.h>
+#include <tms_disp.h>
 
 #include "../include/cpu.h"
 
@@ -40,8 +42,10 @@ struct cmd {
     char arg2[MAX_CMD_CHARS];
 };
 
+#define MAX_BUFLEN 120
+
 struct cmd_history {
-    struct cmd history[HISTORY_SIZE];
+    char history[HISTORY_SIZE][MAX_BUFLEN];
     int current;
     int size;
 };
@@ -49,17 +53,12 @@ struct cmd_history {
 struct prompt {
     char buf[120];
     size_t buflen;
-    struct cmd *decoded_inst;
     WINDOW *win;
     struct cmd_history hist;
     int hist_index;
-};
-
-enum prompt_status {
-    PROMPT_STATUS_OK,
-    PROMPT_STATUS_INVALID,
-    PROMPT_STATUS_INSTRUCTION_DECODED
-};
+    struct cmd *cmd;
+    bool typed_enter;
+} *prompt;
 
 
 /*struct os {
@@ -189,123 +188,151 @@ regwin_update(void)
 }
 
 /**
- * \brief Actualiza el estado del prompt y maneja la entrada del usuario.
- *
- * Esta función gestiona la interacción del usuario con el prompt, capturando las teclas
- * presionadas y realizando acciones correspondientes, como decodificar instrucciones,
- * manejar el historial de comandos, ajustar la frecuencia de la CPU y actualizar la
- * interfaz gráfica.
- *
- * \param prompt Puntero a la estructura `prompt` que contiene el estado actual del prompt.
- *
- * \return Retorna un valor de tipo `enum prompt_status` que indica el estado actual del prompt:
- *         - `PROMPT_STATUS_OK`: El prompt está en un estado normal.
- *         - `PROMPT_STATUS_INSTRUCTION_DECODED`: Se ha decodificado una instrucción válida.
- *         - `PROMPT_STATUS_INVALID`: La instrucción ingresada no es válida.
+ * \brief Limpia la pantalla de línea de comandos, eliminando también el
+ *        historial
  */
-enum prompt_status
-prompt_update(struct prompt *prompt)
+void
+prompt_clear()
 {
+    clear_window_part(prompt->win, 1, 1, 5, 78);
+    prompt->buf[0] = '\0';
+    prompt->buflen = 0;
+    prompt->hist_index = 0;
     /**
-     * TODO: independizar las cola circular del código de la interfaz de
-     *       usuario, para que sea genérica y la podamos usar en otros
-     *       lugares.
+     * TODO: borrar el historial al reiniciar la línea de comandos
      */
-    static char buf[200];
-    static int32_t buflen = 0;
-    int c;
-    enum prompt_status status = PROMPT_STATUS_OK;
-    
-    if ((c = wgetch(prompt->win)) != -1) {
-        if (c == '\n') { 
-            clear_window_part(prompt->win, 1, 1, 5, 78);
-            prompt->decoded_inst = instruction_decode(buf);
-            buf[0] = buflen = 0;
-            if (prompt->decoded_inst) {
-                prompt->hist.history[prompt->hist.current] = *prompt->decoded_inst;
-                prompt->hist.current = (prompt->hist.current + 1) % HISTORY_SIZE;
-                if (prompt->hist.size < HISTORY_SIZE) {
-                    prompt->hist.size++;
-                }
-                prompt->hist_index = prompt->hist.current;
-                status = PROMPT_STATUS_INSTRUCTION_DECODED;
-            } else {
-                status = PROMPT_STATUS_INVALID;
-            }
-        } else if (c == KEY_BACKSPACE || c == 127 || c == 8) {
-            if (buflen > 0) {
-                buf[buflen - 1] = 0;
-                buflen -= 1;
-            }
-        } else if (c == KEY_F(5)) {
-            strncpy(buf, "F5", sizeof(buf));
-            buflen = 2;
-            return PROMPT_STATUS_INSTRUCTION_DECODED;
-        } else if (c == KEY_F(6)) {
-            strncpy(buf, "F6", sizeof(buf));
-            buflen = 2;
-            return PROMPT_STATUS_INSTRUCTION_DECODED;
+    wrefresh(prompt->win);
+}
 
-        }else if (c == KEY_UP) {
-            if (prompt->hist.size > 0) {
-                prompt->hist_index = (prompt->hist_index - 1 + HISTORY_SIZE) % HISTORY_SIZE;
-                snprintf(buf, sizeof(buf), "%s %s %s", prompt->hist.history[prompt->hist_index].name, prompt->hist.history[prompt->hist_index].arg1, prompt->hist.history[prompt->hist_index].arg2);
-                buflen = strlen(buf);
-            }
-        } else if (c == KEY_DOWN) {
-            if (prompt->hist.size > 0) {
-                prompt->hist_index = (prompt->hist_index + 1) % HISTORY_SIZE;
-                snprintf(buf, sizeof(buf), "%s %s %s", prompt->hist.history[prompt->hist_index].name, prompt->hist.history[prompt->hist_index].arg1, prompt->hist.history[prompt->hist_index].arg2);
-                buflen = strlen(buf);
-            }
-        } else if (c == KEY_LEFT) {
-            cpu_set_freq(cpu, cpu_get_freq(cpu) / 2);
-            regwin_update();
-        } else if (c == KEY_RIGHT) {
-            cpu_set_freq(cpu, cpu_get_freq(cpu) * 2);
-            regwin_update();
-        }
-         else if (buflen < 199) {
-            buf[buflen] = c;
-            buf[buflen + 1] = 0;
-            buflen += 1;
-        }
-        clear_window_part(prompt->win, 5, 1, 1, 78);
-        for (int i = 0; i < prompt->hist.size; i++) {
-            int index = (prompt->hist.current - 1 - i + HISTORY_SIZE) % HISTORY_SIZE;
-            mvwprintw(prompt->win, 4 - i, 1, "$ %s %s %s", 
-                      prompt->hist.history[index].name, 
-                      prompt->hist.history[index].arg1, 
-                      prompt->hist.history[index].arg2);
-        }
-        wrefresh(prompt->win);
-        mvwprintw(prompt->win, 5, 1, "$ %s", buf);
+void
+prompt_insert_char(char ch)
+{
+    if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'))) {
+        return;
     }
-    return status;
+    prompt->buf[prompt->buflen] = ch;
+    prompt->buf[prompt->buflen + 1] = 0;
+    prompt->buflen += 1;
+}
+
+void
+prompt_backspace(void)
+{
+    if (prompt->buflen > 0) {
+        prompt->buflen -= 1;
+        prompt->buf[prompt->buflen] = '\0';
+    }
+    clear_window_part(prompt->win, 5, 1, 1, 78);
+    mvwprintw(prompt->win, 5, 1, "$ %s", prompt->buf);
+    wrefresh(prompt->win);
+}
+
+void
+prompt_enter(void)
+{
+    prompt->typed_enter = true;
+    clear_window_part(prompt->win, 1, 1, 5, 78);
+    strncpy(prompt->hist.history[prompt->hist.current], prompt->buf, prompt->buflen);
+    prompt->buf[0] = prompt->buflen = 0;
+    prompt->hist.current = (prompt->hist.current + 1) % HISTORY_SIZE;
+    if (prompt->hist.size < HISTORY_SIZE) {
+        prompt->hist.size++;
+    }
+    prompt->hist_index = prompt->hist.current;
+
+    prompt->cmd = instruction_decode(prompt->buf);
+}
+
+
+struct cmd *
+prompt_get_cmd()
+{
+    return prompt->cmd;
 }
 
 /**
- * \brief Simula un prompt para leer un comando.
- *
- * Esta función simula la lectura de un comando desde un prompt. Asigna memoria para
- * una estructura de tipo `cmd`, lee un comando predefinido ("LOAD PROG") y lo almacena
- * en la estructura.
- *
- * \return Retorna un puntero a la estructura `cmd` que contiene el comando leído.
- *         Retorna `NULL` si no se pudo asignar memoria para la estructura.
+ * \brief Realiza una actualización del estado del prompt de forma que se
+ *        refleja en la TUI
+ * 
+ * Esta función es requerida cuando algo en el estado interno del prompt
+ * fue cambiado y se requiere de una impresión actualizada del prompt.
+ * Usualmente esto sucede cuando te mueves por el historial. 
  */
-struct cmd *
-prompt(void)
+void
+prompt_update(void)
 {
-    struct cmd *cmd = malloc(sizeof(*cmd));
-    if (!cmd) { return NULL; }
-    char buf[] = "LOAD PROG";
-    sscanf(buf, "%s %s %s", cmd->name, cmd->arg1, cmd->arg2);
-    for(int i = 0; cmd->name[i] != '\0'; i += 1) {
-        cmd->name[i] = toupper(cmd->name[i]);
+    prompt->buflen = strnlen(prompt->hist.history[prompt->hist_index], MAX_BUFLEN);
+    snprintf(prompt->buf, prompt->buflen, "%s",
+    prompt->hist.history[prompt->hist_index]);
+    clear_window_part(prompt->win, 5, 1, 1, 78);
+    for (int i = 0; i < prompt->hist.size; i++) {
+        size_t index = 
+            (prompt->hist.current - 1 - i + HISTORY_SIZE) % HISTORY_SIZE;
+        mvwprintw(prompt->win, 4 - i, 1, "$ %s", prompt->hist.history[index]);
     }
-    return cmd;
+    wrefresh(prompt->win);
+    mvwprintw(prompt->win, 5, 1, "$ %s", prompt->buf);
 }
+
+/**
+* \brief Maneja todas las entradas del usuario
+*
+* Esta función maneja cualquier entrada dada por el usuario, dada la entrada 
+* se determina si se trata de un caracter para la línea de comandos que 
+* realizará una acción sobre el simulador o si se trata de una tecla de función
+* que manipula el comportamiento de la TUI
+*
+* \return Se regresa 1 ocurrió un evento significativo, 0 si no ocurrió nada
+*/
+bool
+tui_input_handler()
+{   
+    char in_ch = wgetch(prompt->win);
+    if (in_ch == ERR) {
+        return false; // No hay entrada
+    }
+    if (in_ch == '\n') { 
+        prompt_enter();
+    } else if (in_ch == KEY_BACKSPACE || in_ch == 127 || in_ch == 8) {
+        prompt_backspace();
+    }
+    else if (in_ch == KEY_F(5)) {
+        /* Por implementar */
+    }
+    else if (in_ch == KEY_F(6)) {
+        /* Por implementar*/
+    }
+    else if (in_ch == KEY_F(7)) {
+        swap_disp_pg_up();
+    } 
+    else if (in_ch == KEY_F(8)) {
+        swap_disp_pg_dn();
+    }
+    else if (in_ch == KEY_UP) {
+        if (prompt->hist.size > 0) {
+            prompt->hist_index = 
+                (prompt->hist_index - 1 + HISTORY_SIZE) % HISTORY_SIZE;
+            prompt_update();
+        }
+    } else if (in_ch == KEY_DOWN) {
+        if (prompt->hist.size > 0) {
+            prompt->hist_index = (prompt->hist_index + 1) % HISTORY_SIZE;
+            prompt_update();
+        }
+    } else if (in_ch == KEY_LEFT) {
+        cpu_set_freq(cpu, cpu_get_freq(cpu) / 2);
+        regwin_update();
+    } else if (in_ch == KEY_RIGHT) {
+        cpu_set_freq(cpu, cpu_get_freq(cpu) * 2);
+        regwin_update();
+    }
+    else {
+        prompt_insert_char(in_ch);
+    }
+}
+
+struct user_control *uc;
+
 
 /**
  * \brief Evalúa e interpreta un comando ingresado por el usuario.
@@ -314,9 +341,7 @@ prompt(void)
  * como salir del programa o cargar un archivo en el PCB. Dependiendo del comando, realiza
  * diferentes operaciones y retorna un código de estado.
  *
- * \param cmd Puntero a la estructura que contiene la instrucción leída.
- * \param messages Puntero a la ventana donde se muestran los mensajes.
- * \param pcb Puntero a la estructura PCB donde se cargará el archivo (si corresponde).
+ * \param cmd Puntero a la estructura que contiene el comando leído.
  *
  * \return Retorna:
  *   - 0 en caso de éxito.
@@ -329,31 +354,14 @@ prompt(void)
  * - Si el comando es "LOAD", intenta cargar el archivo especificado en el PCB.
  * - Si el comando es nulo o no reconocido, muestra un mensaje de error en la ventana de mensajes.
  */
-
-struct user_control *uc;
-
-
 int32_t 
-eval(struct cmd *cmd) { 
-
-    // Scroll en el TMS
+cmd_execute(struct cmd *cmd) {
     if (strncmp(cmd->name, "F5", 2) == 0) {
-        // Bajar en el TMS 
-        if (tms_scroll_offset + MARCOS_VISIBLES < TOTAL_MARCOS) {
-            tms_scroll_offset += MARCOS_VISIBLES;
-            tms_update(tms_win, tms_scroll_offset);
-        }
-        return 0;
+        tms_disp_pg_dn();
     } 
     else if (strncmp(cmd->name, "F6", 2) == 0) {
-        // Subir en el TMS
-        if (tms_scroll_offset - MARCOS_VISIBLES >= 0) {
-            tms_scroll_offset -= MARCOS_VISIBLES;
-            tms_update(tms_win, tms_scroll_offset);
-        }
-        return 0;
+        tms_disp_pg_up();
     }
-
     else if (strncmp(cmd->name, "EXIT", 4) == 0 || strncmp(cmd->name, "SALIR", 5) == 0) {
         liberarLista(listos);
         liberarLista(ejecucion);
@@ -363,8 +371,7 @@ eval(struct cmd *cmd) {
         printf("\n");
         swap_close();
         exit(0);
-    } 
-    
+    }
     else if (strncmp(cmd->name, "LOAD", 4) == 0) {
         if (cmd->arg1[0] == '\0') {
             msg_log(LOG_LEVEL_ERROR, "Falta el nombre del archivo\n");
@@ -429,7 +436,7 @@ eval(struct cmd *cmd) {
                         listaInsertarFinal(listos, nuevo_proceso);
                         user_new -> process_counter += 1;
                         msg_log(LOG_LEVEL_INFO, "Proceso agregado a la lista de Listos.\n");
-                        tms_update(tms_win, tms_scroll_offset);  
+                        tms_disp_update(tms_win, tms_scroll_offset);  
                     }
                     break;
                 case 2:
@@ -446,7 +453,8 @@ eval(struct cmd *cmd) {
             }
             
         }
-    }else if (strncmp(cmd->name, "KILL", 4) == 0) {
+    }
+    else if (strncmp(cmd->name, "KILL", 4) == 0) {
         if (cmd->arg1[0] == '\0') {
             msg_log(LOG_LEVEL_ERROR, "Falta el PID del proceso a eliminar.\n");
             return 1;
@@ -572,7 +580,7 @@ void ejecutarProcesos(int32_t *quantum) {
             listaInsertarFinal(nuevos, proceso_nuevo);
             msg_log(LOG_LEVEL_WARN, "No hay espacio en SWAP para el proceso. Permanece en Nuevos.\n");
         }
-        tms_update(tms_win, tms_scroll_offset);
+        tms_disp_update(tms_win, tms_scroll_offset);
     }
 
     // Si no hay proceso en ejecución y hay procesos en listos, mover el proceso con menor prioridad a Ejecución
@@ -643,7 +651,7 @@ void ejecutarProcesos(int32_t *quantum) {
 
                 listaInsertarFinal(terminados, finished);
                 swap_free_frames(finished);
-                tms_update(tms_win, tms_scroll_offset);
+                tms_disp_update(tms_win, tms_scroll_offset);
                 *quantum = 0;
                 cpu_reset(cpu);
                 process_update();
@@ -1019,36 +1027,38 @@ main(void) {
     msg_init();
     process_init();
     swap_init();
+    swap_disp_init();
 
-    swap_init();
+    keypad(stdscr, TRUE);
 
-    struct prompt prompt;
+    swap_disp_init();
+    tms_disp_init();
     reg = newwin(7, 80, 10, 0);
     box(reg, 0, 0);
     wrefresh(reg);
-    prompt.win = newwin(7, 80, 17, 0);
-    box(prompt.win, 0, 0);
+    prompt->win = newwin(7, 80, 17, 0);
+    box(prompt->win, 0, 0);
     //counter = newwin(7, 80, 24, 0);
     //box(counter, 0, 0);
     //wrefresh(counter);
 
     //inicializar la ventana de TMS
     tms_win = newwin(19, 16, 24, 0);
-    tms_init(tms_win);
+    tms_disp_init(tms_win);
     //tms_assign_frame(1, 1); //Asignar marco
     //tms_free_frame(1); //Liberar marco
-    tms_update(tms_win, tms_scroll_offset);
+    tms_disp_update(tms_win, tms_scroll_offset);
 
     //inicializar la ventan del SWAP
     //Pendiente
 
-    wrefresh(prompt.win);
-    nodelay(prompt.win, TRUE); 
-    keypad(prompt.win, TRUE);
-    prompt.hist.current = 0;
-    prompt.hist.size = 0;
-    prompt.hist_index = 0;
-    mvwprintw(prompt.win, 0, 35, "|Prompt|");
+    wrefresh(prompt->win);
+    nodelay(prompt->win, TRUE); 
+    keypad(prompt->win, TRUE);
+    prompt->hist.current = 0;
+    prompt->hist.size = 0;
+    prompt->hist_index = 0;
+    mvwprintw(prompt->win, 0, 35, "|Prompt|");
     regwin_update();
 
     uc = malloc(sizeof(*uc));
@@ -1065,11 +1075,15 @@ main(void) {
     int quantum = 0;
 
     while (true) {
-        enum prompt_status status = prompt_update(&prompt);
-        if (status == PROMPT_STATUS_INSTRUCTION_DECODED) {
-            eval(prompt.decoded_inst);
-            free(prompt.decoded_inst);
-            prompt.decoded_inst = NULL;
+        tui_input_handler();
+        if (prompt->typed_enter) {
+            prompt->typed_enter = false; // Reiniciar el estado de enter
+            struct cmd *cmd = prompt_get_cmd();
+            if (cmd == NULL) {
+                msg_log(LOG_LEVEL_ERROR, "Comando nulo.\n");
+                continue; // No hacer nada si el comando es nulo
+            }
+            int32_t result = cmd_execute(cmd);
         }
 
         // Ejecutar procesos
@@ -1092,7 +1106,7 @@ main(void) {
         }*/
 
         wrefresh(counter);
-        wrefresh(prompt.win);
+        wrefresh(prompt->win);
         wrefresh(process);
         /*
          * La lógica del bucle principal se ejecuta cada 33 ms
@@ -1111,8 +1125,6 @@ main(void) {
     liberarLista(listos);
     liberarLista(ejecucion);
     liberarLista(terminados);
-
-    swap_close();
 
     endwin();
     return 0;

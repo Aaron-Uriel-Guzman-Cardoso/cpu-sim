@@ -1,4 +1,4 @@
-#include "swap.h"
+#include <swap.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ncurses.h>
@@ -7,9 +7,6 @@
 #include <msg.h>
 #include <time.h>
 #include <unistd.h>
-
-#define TOTAL_MARCOS 4096  
-#define MARCOS_VISIBLES 16
 
 // Archivo SWAP global
 static FILE *swapfile = NULL;
@@ -211,6 +208,22 @@ swap_get(uint16_t frame, uint8_t offset)
     return inst;
 }
 
+/**
+ * \brief Obtiene el PID del proceso que ocupa un marco específico
+ * 
+ * \param frame_num Número del marco a consultar
+ * \return PID del proceso que ocupa el marco, 0 si está libre o se trató de
+ *         acceder a un marco inválido.
+ */
+int32_t
+swap_get_pid(uint16_t frame)
+{
+    if (frame < 0 || frame >= MAX_FRAMES) {
+        return 0;
+    }
+    return swap_map[frame].pid;
+}
+
 // Mostrar contenido de un marco
 bool swap_display_frame(WINDOW *win, int frame_num) {
     char buffer[INSTR_SIZE + 1];
@@ -248,142 +261,3 @@ int swap_get_free_frame_count() {
     }
     return count;
 }
-
-
-//
-//
-//
-
-/**
- * \brief Inicializa la ventana TMS (Tabla de Memoria de Segmentos).
- *
- * Esta función crea una nueva ventana para mostrar la Tabla de Memoria de Segmentos (TMS),
- * que muestra los marcos de memoria y sus respectivos PIDs asignados.
- */
-
- void tms_init(WINDOW *tms_win) {
-    //tms_win = newwin(19, 16, 24, 0); // Mismo tamaño y posición
-    
-    box(tms_win, 0, 0);
-    mvwprintw(tms_win, 0, 6, "TMS");
-    
-    wrefresh(tms_win);
-}
-
-/* \brief Actualiza la ventana TMS con los marcos y sus PIDs.
- *
- * Esta función limpia la ventana TMS y muestra el estado actual de los marcos
- * de memoria, mostrando el PID asignado a cada marco.
- */
-
- void tms_update(WINDOW *tms_win, int tms_scroll_offset) {
-    werase(tms_win);
-    box(tms_win, 0, 0);
-    
-    mvwprintw(tms_win, 0, 6, "TMS");
-    mvwprintw(tms_win, 1, 1, "Marcos-PID");
-    
-    for (int i = 0; i < MARCOS_VISIBLES; i++) {
-        int marco_actual = tms_scroll_offset + i;
-        if (marco_actual >= TOTAL_MARCOS) break;
-        
-        char marco[5];
-        snprintf(marco, sizeof(marco), "%03X", marco_actual);
-        mvwprintw(tms_win, i+2, 1, "%s - %d", marco, swap_map[marco_actual].pid);
-    }
-    
-    wrefresh(tms_win);
-}
-
-void tms_handle_input(WINDOW *tms_win, int c, int tms_scroll_offset) {
-    switch(c) {
-        case KEY_F(5): // Bajar
-            if (tms_scroll_offset + MARCOS_VISIBLES < TOTAL_MARCOS) {
-                tms_scroll_offset += MARCOS_VISIBLES;
-                tms_update(tms_win, tms_scroll_offset);
-            }
-            break;
-            
-        case KEY_F(6): // Subir
-            if (tms_scroll_offset - MARCOS_VISIBLES >= 0) {
-                tms_scroll_offset -= MARCOS_VISIBLES;
-                tms_update(tms_win, tms_scroll_offset);
-            }
-            break;
-    }
-}
-
-/**
- * \brief Asigna un PID a un marco de memoria en el TMS.
- *
- * Esta función asigna un PID a un marco de memoria específico en el TMS.
- * Si el número de marco es válido (entre 0 y 15), se asigna el PID al marco.
- *
- * \param frame_num Número del marco (0-15).
- * \param pid ID del proceso a asignar al marco.
- */
-/*void tms_assign_frame(int frame_num, int pid) {
-    if (frame_num >= 0 && frame_num < TOTAL_MARCOS) {
-        tms_frames[frame_num] = pid;
-        
-        // Si el marco está visible, actualizar
-        if (frame_num >= tms_scroll_offset && 
-            frame_num < tms_scroll_offset + MARCOS_VISIBLES) {
-            tms_update();
-        }
-    }
-}*/
-
-/**
- * \brief Libera un marco de memoria en el TMS.
- *
- * Esta función libera un marco de memoria específico en el TMS, estableciendo su PID a 0.
- * Si el número de marco es válido (entre 0 y 15), se libera el marco.
- *
- * \param frame_num Número del marco (0-15) a liberar.
- */
-/*void tms_free_frame(int frame_num) {
-    if (frame_num >= 0 && frame_num < TOTAL_MARCOS) {
-        tms_frames[frame_num] = 0;
-        
-        // Si el marco está visible, actualizar
-        if (frame_num >= tms_scroll_offset && 
-            frame_num < tms_scroll_offset + MARCOS_VISIBLES) {
-            tms_update();
-        }
-    }
-}*/
-
-/**
- * \brief Imprime los marcos ocupados por un proceso y sus equivalentes en SWAP.
- *
- * \param pcb Puntero al proceso (PCB) cuyos marcos se desean imprimir.
- * \param max_lines Número máximo de líneas que se pueden imprimir en la ventana.
- * \param msg Puntero a la ventana de mensajes
- */
-void print_process_frames(WINDOW *msg, PCB *pcb, int max_lines) {
-    if (!pcb || !pcb->tmp) {
-        mvwprintw(msg, 1, 2, "Error: El proceso no tiene marcos asignados.");
-        wrefresh(msg);
-        return;
-    }
-
-    werase(msg); // Limpiar la ventana de mensajes
-    box(msg, 0, 0);
-
-    mvwprintw(msg, 1, 2, "Marcos ocupados por el proceso PID: %d", pcb->PID);
-    mvwprintw(msg, 2, 2, "----------------------------------------");
-
-    int lines_used = 3; // Contador de líneas usadas (incluyendo encabezados)
-    for (int i = 0; i < pcb->tmp_size && lines_used < max_lines; i++) {
-        mvwprintw(msg, lines_used, 2, "Marco %d -> SWAP Marco %d", i, pcb->tmp[i]);
-        lines_used++;
-    }
-
-    if (lines_used == max_lines) {
-        mvwprintw(msg, lines_used, 2, "... (más marcos no mostrados)");
-    }
-
-    wrefresh(msg);
-}
-
