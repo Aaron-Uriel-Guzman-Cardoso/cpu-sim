@@ -4,6 +4,9 @@
 #include <ncurses.h>
 #include <cpu.h>
 #include <os.h>
+#include <msg.h>
+#include <time.h>
+#include <unistd.h>
 
 #define TOTAL_MARCOS 4096  
 #define MARCOS_VISIBLES 16
@@ -166,10 +169,25 @@ swap_load_program1(PCB *pcb, const char *filename)
     for (int i = 0; i < pcb->tmp_size; i++) {
         for (int j = 0; j < FRAME_SIZE && j < pcb->program_size; j++) {
             if (fgets(buffer, 33, program)) {
-                struct inst *inst = inst_from_str(buffer);
+                struct inst inst;
+                struct inst *loaded_inst = inst_from_str(buffer);
+                if(loaded_inst){
+                    inst = *loaded_inst;
+                    free(loaded_inst);
+                }
+                else{
+                    msg_log(LOG_LEVEL_ERROR, "Instrucción invalida");
+                    inst.op = OP_END;
+                    /*struct timespec update_delay = {
+                        .tv_sec = 2,
+                        .tv_nsec =0
+                    };
+                    clock_nanosleep(CLOCK_MONOTONIC, 0, &update_delay, NULL);*/
+                    //usleep(2);
+                }
                 long real_addr = (pcb->tmp[i] * FRAME_SIZE + j) * INSTR_SIZE;
                 fseek(swapfile, real_addr, SEEK_SET);
-                fwrite(inst, INSTR_SIZE, 1, swapfile);
+                fwrite(&inst, INSTR_SIZE, 1, swapfile);
             }
         }
     }
