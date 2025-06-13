@@ -13,6 +13,8 @@ enum consts {
     INSTS_MAX = 128,
 };
 
+typedef uint64_t word_t; /* Palabras de 64 bits en la computadora */
+
 /**
  * \brief Representa el contexto de la CPU, siendo este únicamente los
  *        registros.

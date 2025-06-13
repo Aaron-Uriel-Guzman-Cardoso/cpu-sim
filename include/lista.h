@@ -18,6 +18,17 @@ typedef struct fileList {
     struct fileTitle *fin;
 }fileList;
 
+/**
+ * Guarda uno de los índices de página de un proceso tanto en swap como en RAM
+ * 
+ * Nota: son int32_t porque queremos usar valores negativos para indicar que
+ *       tal marco no tiene presencia en alguna de las memorias.
+ */
+struct page_table_entry {
+    int32_t on_swap;
+    int32_t on_ram;
+};
+
 typedef struct PCB {
     struct cpu_context context;
     uint32_t PID;
@@ -27,9 +38,13 @@ typedef struct PCB {
     uint8_t UID;
     int P;
     float KCPU;
-    int32_t *tmp;           // Tabla de marcos del proceso (TMP)
-    size_t tmp_size;       // Tamaño de TMP (marcos usados)
-    int program_size;   // Total de instrucciones del programa
+    uint16_t program_size;                   // Total de instrucciones del programa
+    /** 
+     * TODO: adecuar el código que crea a PCB para crear a tmp como un flexible
+     *       array member y que el tamaño se guarde como constante.
+     */
+    const uint16_t tmp_size;                   // Tamaño de TMP (marcos usados)
+    struct page_table_entry *tmp;       // Datos de la tabla de marcos del proceso (TMP)
 } PCB;
 
 

@@ -5,7 +5,7 @@
  * Queremos un desplazamiento de página como el de Vim, que te mueve
  * Solo la mitad de los elementos de pantalla 
  */
-const int8_t SCROLL_UNIT = FRAME_SIZE / 2;
+const int8_t SCROLL_UNIT = PAGE_MAX_WORDS / 2;
 
 struct tms_disp {
     int scroll_offset;
@@ -45,9 +45,9 @@ tms_disp_update(void)
     mvwprintw(tmp_disp.win, 0, 6, "TMS");
     mvwprintw(tmp_disp.win, 1, 1, "Marcos-PID");
     
-    for (int i = 0; i < FRAME_SIZE; i++) {
+    for (int i = 0; i < PAGE_MAX_WORDS; i++) {
         int marco_actual = tmp_disp.scroll_offset + i;
-        if (marco_actual >= MAX_FRAMES) { break; }
+        if (marco_actual >= SWAP_MAX_PAGES) { break; }
         mvwprintw(tmp_disp.win, i+2, 1, "%03X - %d", marco_actual, swap_get_pid(marco_actual));
     }
     
@@ -57,7 +57,7 @@ tms_disp_update(void)
 void
 tms_disp_pg_dn(void)
 {
-    if (tmp_disp.scroll_offset + SCROLL_UNIT < MAX_FRAMES) {
+    if (tmp_disp.scroll_offset + SCROLL_UNIT < SWAP_MAX_PAGES) {
         tmp_disp.scroll_offset += SCROLL_UNIT;
         tms_disp_update();
     }
