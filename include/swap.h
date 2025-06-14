@@ -4,16 +4,16 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <ncurses.h>
+#include <cpu.h>
 #include "lista.h"
 
 /*
  * Definiciones constantes para la memoria swap
  */
-#define PAGE_MAX_WORDS 16                        // Instrucciones por página
-#define WORD_SIZE 8                              // Bytes por instrucción/palabra
-#define SWAP_MAX_WORDS 65536                     // Total de instrucciones en SWAP
-#define SWAP_MAX_PAGES SWAP_SIZE / PAGE_SIZE     // Cuantas páginas tiene SWAP
-#define SWAP_SIZE WORD_SIZE * SWAP_MAX_WORDS     // Tamaño total de SWAP en bytes
+#define SWAP_PAGE_SIZE 16                                       // Instrucciones por página
+#define SWAP_NUM_PAGES 4096                                     // Cuantas páginas tiene SWAP
+#define SWAP_TOTAL_WORD_SIZE SWAP_PAGE_SIZE * SWAP_NUM_PAGES    // Total de instrucciones en SWAP
+#define SWAP_TOTAL_BYTE_SIZE WORD_SIZE * SWAP_TOTAL_WORD_SIZE   // Tamaño total de SWAP en bytes
 
 // Entrada en la Tabla de Mapa de Swap (TMS)
 typedef struct {
@@ -27,7 +27,7 @@ int swap_allocate_frames(PCB *pcb);
 void swap_free_frames(PCB *pcb);
 bool swap_load_program(PCB *pcb, const char *filename);
 int32_t swap_load_program1(PCB *pcb, const char *filename);
-int32_t swap_get_page(word_t dst[PAGE_MAX_WORDS], uint16_t page_index);
+int32_t swap_get_page(word_t dst[SWAP_PAGE_SIZE], uint16_t page_index);
 int32_t swap_get_pid(uint16_t frame);
 long swap_translate_address(PCB *pcb, int virtual_address);
 int swap_calculate_frames(int program_size);

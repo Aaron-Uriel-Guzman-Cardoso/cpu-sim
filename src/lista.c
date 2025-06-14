@@ -27,6 +27,13 @@ void crearLista(Lista *l) {
 }
 
 /**
+ * \brief la tabla de marco de procesos
+ */
+struct tmp {
+
+};
+
+/**
  * \brief Crea un nuevo nodo de tipo PCB.
  * \param context Contexto de la CPU para el nuevo nodo.
  * \param file_name Nombre del archivo asociado al proceso.

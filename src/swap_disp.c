@@ -32,13 +32,13 @@ swap_disp_update(void)
     werase(swap_disp_state.win);
     for (uint8_t curr_rel_frame = 0; curr_rel_frame < MAX_FRAMES_PER_PAGE; curr_rel_frame += 1) {
         uint16_t frame_num = swap_disp_state.curr_pg * MAX_FRAMES_PER_PAGE + curr_rel_frame;
-        if (frame_num >= SWAP_MAX_PAGES) {
+        if (frame_num >= SWAP_NUM_PAGES) {
             break;
         }
         const uint16_t horizontal_offset = curr_rel_frame * 44;
-        for (uint8_t frame_offset = 0; frame_offset < PAGE_MAX_WORDS; frame_offset += 1) {
+        for (uint8_t frame_offset = 0; frame_offset < SWAP_PAGE_SIZE; frame_offset += 1) {
             struct inst inst = swap_get_page(frame_num, frame_offset);
-            size_t real_addr = (frame_num * PAGE_MAX_WORDS + frame_offset) * WORD_SIZE;
+            size_t real_addr = (frame_num * SWAP_PAGE_SIZE + frame_offset) * WORD_SIZE;
             char instbuf[20];
             inst_to_str(&inst, instbuf, sizeof(instbuf));
             /*

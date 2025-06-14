@@ -12,7 +12,7 @@
 static FILE *swapfile = NULL;
 
 // Tabla de Mapa de Swap (TMS) global
-static FrameEntry swap_map[SWAP_MAX_PAGES];
+static FrameEntry swap_map[SWAP_NUM_PAGES];
 
 /**
  * \brief Inicializa el sistema SWAP.
@@ -26,13 +26,13 @@ void swap_init() {
     
     // Inicializar con ceros
     char zero = 0;
-    for (int i = 0; i < SWAP_MAX_WORDS * WORD_SIZE; i++) {
+    for (int i = 0; i < SWAP_WORD_SIZE * WORD_SIZE; i++) {
         fwrite(&zero, 1, 1, swapfile);
     }
     fflush(swapfile);
     
     // Inicializar TMS
-    for (int i = 0; i < SWAP_MAX_PAGES; i++) {
+    for (int i = 0; i < SWAP_NUM_PAGES; i++) {
         swap_map[i].pid = 0;
     }
 }
@@ -60,7 +60,7 @@ void swap_close() {
  * \return Número de marcos necesarios.
  */
 int swap_calculate_frames(int program_size) {
-    return (program_size + PAGE_MAX_WORDS - 1) / PAGE_MAX_WORDS;
+    return (program_size + SWAP_PAGE_SIZE - 1) / SWAP_PAGE_SIZE;
 }
 
 /**
@@ -71,13 +71,13 @@ int swap_calculate_frames(int program_size) {
  */
 int swap_allocate_frames(PCB *pcb) {
     const int frames_needed = swap_calculate_frames(pcb->program_size);
-    if (frames_needed >= SWAP_MAX_PAGES) {
+    if (frames_needed >= SWAP_NUM_PAGES) {
         return -1;
     }
     pcb->tmp = malloc(frames_needed * sizeof(*pcb->tmp));
     pcb->tmp_size = 0;
 
-    for (int i = 0; i < SWAP_MAX_PAGES && pcb->tmp_size < frames_needed; i++) {
+    for (int i = 0; i < SWAP_NUM_PAGES && pcb->tmp_size < frames_needed; i++) {
         if (swap_map[i].pid == 0) {
             swap_map[i].pid = pcb->PID;
             pcb->tmp[pcb->tmp_size++] = i;
@@ -178,7 +178,7 @@ swap_load_program1(PCB *pcb, const char *filename)
         return 2;
     }
     FILE *program = fopen(filename, "r");
-    if ((pcb->program_size = count_instructions_in_file(program)) >= SWAP_MAX_WORDS) {
+    if ((pcb->program_size = count_instructions_in_file(program)) >= SWAP_WORD_SIZE) {
         fclose(program);
         return -1; // El programa es demasiado grande para la memoria swap
     }
@@ -190,7 +190,7 @@ swap_load_program1(PCB *pcb, const char *filename)
     }
 
     for (int i = 0; i < pcb->tmp_size; i++) {
-        for (int j = 0; j < PAGE_MAX_WORDS && j < pcb->program_size; j++) {
+        for (int j = 0; j < SWAP_PAGE_SIZE && j < pcb->program_size; j++) {
             if (fgets(buffer, 33, program)) {
                 struct inst inst;
                 struct inst *loaded_inst = inst_from_str(buffer);
@@ -208,7 +208,7 @@ swap_load_program1(PCB *pcb, const char *filename)
                     clock_nanosleep(CLOCK_MONOTONIC, 0, &update_delay, NULL);*/
                     //usleep(2);
                 }
-                long real_addr = (pcb->tmp[i] * PAGE_MAX_WORDS + j) * WORD_SIZE;
+                long real_addr = (pcb->tmp[i] * SWAP_PAGE_SIZE + j) * WORD_SIZE;
                 fseek(swapfile, real_addr, SEEK_SET);
                 fwrite(&inst, WORD_SIZE, 1, swapfile);
             }
@@ -240,17 +240,17 @@ swap_load_program1(PCB *pcb, const char *filename)
  *         2 si el arreglo era nulo.
  */
 int32_t
-swap_get_page(word_t dst[PAGE_MAX_WORDS], uint16_t page_index)
+swap_get_page(word_t dst[SWAP_PAGE_SIZE], uint16_t page_index)
 {
     if (!dst) {
         return 2;
     }
-    const uint16_t byte_addr = (page_index * PAGE_MAX_WORDS) * WORD_SIZE;
-    if (byte_addr >= SWAP_SIZE) {
+    const uint16_t byte_addr = (page_index * SWAP_PAGE_SIZE) * WORD_SIZE;
+    if (byte_addr >= SWAP_TOTAL_BYTE_SIZE) {
         return 1;
     }
     fseek(swapfile, byte_addr, SEEK_SET);
-    assert((PAGE_MAX_WORDS * WORD_SIZE) == sizeof(dst)); /** TODO: mover a lugar adecuado */
+    assert((SWAP_PAGE_SIZE * WORD_SIZE) == sizeof(dst)); /** TODO: mover a lugar adecuado */
     fread(dst, sizeof(dst), 1, swapfile);
     return 0;
 }
@@ -265,7 +265,7 @@ swap_get_page(word_t dst[PAGE_MAX_WORDS], uint16_t page_index)
 int32_t
 swap_get_pid(uint16_t frame)
 {
-    if (frame < 0 || frame >= SWAP_MAX_PAGES) {
+    if (frame < 0 || frame >= SWAP_NUM_PAGES) {
         return 0;
     }
     return swap_map[frame].pid;
@@ -277,8 +277,8 @@ bool swap_display_frame(WINDOW *win, int frame_num) {
     werase(win);
     
     mvwprintw(win, 0, 0, "Marco %04X:", frame_num);
-    for (int i = 0; i < PAGE_MAX_WORDS; i++) {
-        long offset = (frame_num * PAGE_MAX_WORDS * WORD_SIZE) + (i * WORD_SIZE);
+    for (int i = 0; i < SWAP_PAGE_SIZE; i++) {
+        long offset = (frame_num * SWAP_PAGE_SIZE * WORD_SIZE) + (i * WORD_SIZE);
         fseek(swapfile, offset, SEEK_SET);
         fread(buffer, WORD_SIZE, 1, swapfile);
         buffer[WORD_SIZE] = '\0';
@@ -293,7 +293,7 @@ void swap_display_map(WINDOW *win) {
     werase(win);
     mvwprintw(win, 0, 0, "SWAP MAP (Marcos libres: %d)", swap_get_free_frame_count());
     
-    for (int i = 0; i < SWAP_MAX_PAGES; i++) {
+    for (int i = 0; i < SWAP_NUM_PAGES; i++) {
         if (i % 64 == 0) wprintw(win, "\n");
         wprintw(win, "%c", (swap_map[i].pid == -1) ? '.' : '0' + (swap_map[i].pid % 10));
     }
@@ -309,7 +309,7 @@ void swap_display_map(WINDOW *win) {
  */
 int swap_get_free_frame_count() {
     int count = 0;
-    for (int i = 0; i < SWAP_MAX_PAGES; i++) {
+    for (int i = 0; i < SWAP_NUM_PAGES; i++) {
         if (swap_map[i].pid == -1) count++;
     }
     return count;
