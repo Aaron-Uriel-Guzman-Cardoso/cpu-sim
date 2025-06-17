@@ -16,6 +16,7 @@
 #include <mmu.h>
 #include <swap.h>
 
+struct cpu *cpu; /* Tendremos una única CPU en el simulador */
 
 /**
  * \brief Representación de los dos formatos internos de instrucciones: de
@@ -28,24 +29,24 @@
  * union etiquetada.
  */
 union op_fn {
-    int32_t (*reg_to_reg)(struct cpu *, enum reg, enum reg);
-    int32_t (*imm)(struct cpu *, enum reg, int32_t);
+    int32_t (*reg_to_reg)(enum reg, enum reg);
+    int32_t (*imm)(enum reg, int32_t);
 };
 
-int32_t cpu_mov(struct cpu *self, enum reg ra, enum reg rb);
-int32_t cpu_movi(struct cpu *self, enum reg ra, int imm);
-int32_t cpu_add(struct cpu *self, enum reg ra, enum reg rb);
-int32_t cpu_addi(struct cpu *self, enum reg ra, int imm);
-int32_t cpu_sub(struct cpu *self, enum reg ra, enum reg rb);
-int32_t cpu_subi(struct cpu *self, enum reg ra, int imm);
-int32_t cpu_mul(struct cpu *self, enum reg ra, enum reg rb);
-int32_t cpu_muli(struct cpu *self, enum reg ra, int imm);
-int32_t cpu_div(struct cpu *self, enum reg ra, enum reg rb);
-int32_t cpu_divi(struct cpu *self, enum reg ra, int imm);
-int32_t cpu_inc(struct cpu *self, enum reg ra, int32_t imm);
-int32_t cpu_dec(struct cpu *self, enum reg ra,  int32_t imm);
-int32_t cpu_nop(struct cpu *self, enum reg ra,  int32_t imm);
-int32_t cpu_end(struct cpu *self, enum reg ra,  int32_t imm);
+int32_t cpu_mov(enum reg ra, enum reg rb);
+int32_t cpu_movi(enum reg ra, int imm);
+int32_t cpu_add(enum reg ra, enum reg rb);
+int32_t cpu_addi(enum reg ra, int imm);
+int32_t cpu_sub(enum reg ra, enum reg rb);
+int32_t cpu_subi(enum reg ra, int imm);
+int32_t cpu_mul(enum reg ra, enum reg rb);
+int32_t cpu_muli(enum reg ra, int imm);
+int32_t cpu_div(enum reg ra, enum reg rb);
+int32_t cpu_divi(enum reg ra, int imm);
+int32_t cpu_inc(enum reg ra, int32_t imm);
+int32_t cpu_dec(enum reg ra,  int32_t imm);
+int32_t cpu_nop(enum reg ra,  int32_t imm);
+int32_t cpu_end(enum reg ra,  int32_t imm);
 
 /**
  * \brief Todas las instrucciones que podrá ejecutar la CPU
@@ -67,12 +68,12 @@ union op_fn ops[OP_LIMIT] = {
  * \param rb Registro origen
  */
 int32_t
-cpu_mov(struct cpu *self, enum reg ra, enum reg rb)
+cpu_mov(enum reg ra, enum reg rb)
 {
     if (ra >= REG_LIMIT || rb >= REG_LIMIT) {
         return 1;
     }
-    self->regs[ra] = self->regs[rb];
+    cpu->regs[ra] = cpu->regs[rb];
     return 0;
 }
 
@@ -82,12 +83,12 @@ cpu_mov(struct cpu *self, enum reg ra, enum reg rb)
  * \param imm Valor inmediato ingresado
  */
 int32_t
-cpu_movi(struct cpu *self, enum reg ra, int imm)
+cpu_movi(enum reg ra, int imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->regs[ra] = imm;
+    cpu->regs[ra] = imm;
     return 0;
 }
 
@@ -101,15 +102,15 @@ cpu_movi(struct cpu *self, enum reg ra, int imm)
  *       \ref cpu::overflow será true.
  */
 int32_t
-cpu_add(struct cpu *self, enum reg ra, enum reg rb)
+cpu_add(enum reg ra, enum reg rb)
 {
     if (ra >= REG_LIMIT || rb >= REG_LIMIT) {
         return 1;
     }
-    self->overflow = (self->regs[ra] > 0 && self->regs[ra] > INT32_MAX - self->regs[rb]) ||
-                     (self->regs[ra] < 0 && self->regs[ra] < INT32_MIN - self->regs[rb]);
-    if (!self->overflow) {
-        self->regs[ra] += self->regs[rb];
+    cpu->overflow = (cpu->regs[ra] > 0 && cpu->regs[ra] > INT32_MAX - cpu->regs[rb]) ||
+                     (cpu->regs[ra] < 0 && cpu->regs[ra] < INT32_MIN - cpu->regs[rb]);
+    if (!cpu->overflow) {
+        cpu->regs[ra] += cpu->regs[rb];
     }
     return 0;
 }
@@ -124,15 +125,15 @@ cpu_add(struct cpu *self, enum reg ra, enum reg rb)
  *       \ref cpu::overflow será true.
  */
 int32_t
-cpu_addi(struct cpu *self, enum reg ra, int imm)
+cpu_addi(enum reg ra, int imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->overflow = (self->regs[ra] > 0 && self->regs[ra] > INT32_MAX - imm) ||
-                     (self->regs[ra] < 0 && self->regs[ra] < INT32_MIN - imm);
-    if (!self->overflow) {
-        self->regs[ra] += imm;
+    cpu->overflow = (cpu->regs[ra] > 0 && cpu->regs[ra] > INT32_MAX - imm) ||
+                     (cpu->regs[ra] < 0 && cpu->regs[ra] < INT32_MIN - imm);
+    if (!cpu->overflow) {
+        cpu->regs[ra] += imm;
     }
     return 0;
 }
@@ -147,15 +148,15 @@ cpu_addi(struct cpu *self, enum reg ra, int imm)
  *       \ref cpu::overflow será true.
  */
 int32_t
-cpu_sub(struct cpu *self, enum reg ra, enum reg rb)
+cpu_sub(enum reg ra, enum reg rb)
 {
     if (ra >= REG_LIMIT || rb >= REG_LIMIT) {
         return 1;
     }
-    self->overflow = (self->regs[ra] > 0 && self->regs[ra] > INT32_MAX + self->regs[rb]) ||
-                     (self->regs[ra] < 0 && self->regs[ra] < INT32_MIN + self->regs[rb]);
-    if (!self->overflow) {
-        self->regs[ra] -= self->regs[rb];
+    cpu->overflow = (cpu->regs[ra] > 0 && cpu->regs[ra] > INT32_MAX + cpu->regs[rb]) ||
+                     (cpu->regs[ra] < 0 && cpu->regs[ra] < INT32_MIN + cpu->regs[rb]);
+    if (!cpu->overflow) {
+        cpu->regs[ra] -= cpu->regs[rb];
     }
     return 0;
 }
@@ -170,15 +171,15 @@ cpu_sub(struct cpu *self, enum reg ra, enum reg rb)
  *      \ref cpu::overflow será true.
  */
 int32_t
-cpu_subi(struct cpu *self, enum reg ra, int imm)
+cpu_subi(enum reg ra, int imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->overflow = (self->regs[ra] > 0 && self->regs[ra] > INT32_MAX + imm) ||
-                     (self->regs[ra] < 0 && self->regs[ra] < INT32_MIN + imm);
-    if (!self->overflow) {
-        self->regs[ra] -= imm;
+    cpu->overflow = (cpu->regs[ra] > 0 && cpu->regs[ra] > INT32_MAX + imm) ||
+                     (cpu->regs[ra] < 0 && cpu->regs[ra] < INT32_MIN + imm);
+    if (!cpu->overflow) {
+        cpu->regs[ra] -= imm;
     }
     return 0;
 }
@@ -194,17 +195,17 @@ cpu_subi(struct cpu *self, enum reg ra, int imm)
  *       \ref cpu::overflow será true.
  */
 int32_t
-cpu_mul(struct cpu *self, enum reg ra, enum reg rb)
+cpu_mul(enum reg ra, enum reg rb)
 {
     if (ra >= REG_LIMIT || rb >= REG_LIMIT) {
         return 1;
     }
-    self->overflow = (self->regs[ra] > 0 && self->regs[ra] > INT32_MAX / self->regs[rb]) ||
-                     (self->regs[ra] < 0 && self->regs[ra] < INT32_MIN / self->regs[rb]) ||
-                     ((self->regs[ra] == -1) && (self->regs[rb] == INT32_MIN)) ||
-                     ((self->regs[ra] == INT32_MIN) && (self->regs[rb] == -1));
-    if (!self->overflow) {
-        self->regs[ra] *= self->regs[rb];
+    cpu->overflow = (cpu->regs[ra] > 0 && cpu->regs[ra] > INT32_MAX / cpu->regs[rb]) ||
+                     (cpu->regs[ra] < 0 && cpu->regs[ra] < INT32_MIN / cpu->regs[rb]) ||
+                     ((cpu->regs[ra] == -1) && (cpu->regs[rb] == INT32_MIN)) ||
+                     ((cpu->regs[ra] == INT32_MIN) && (cpu->regs[rb] == -1));
+    if (!cpu->overflow) {
+        cpu->regs[ra] *= cpu->regs[rb];
     }
     return 0;
 }
@@ -220,17 +221,17 @@ cpu_mul(struct cpu *self, enum reg ra, enum reg rb)
  *       \ref cpu::overflow será true.
  */
 int32_t
-cpu_muli(struct cpu *self, enum reg ra, int imm)
+cpu_muli(enum reg ra, int imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->overflow = (self->regs[ra] > 0 && self->regs[ra] > INT32_MAX / imm) ||
-                     (self->regs[ra] < 0 && self->regs[ra] < INT32_MIN / imm) ||
-                     ((self->regs[ra] == -1) && (imm == INT32_MIN)) ||
-                     ((self->regs[ra] == INT32_MIN) && (imm == -1));
-    if (!self->overflow) {
-        self->regs[ra] *= imm;
+    cpu->overflow = (cpu->regs[ra] > 0 && cpu->regs[ra] > INT32_MAX / imm) ||
+                     (cpu->regs[ra] < 0 && cpu->regs[ra] < INT32_MIN / imm) ||
+                     ((cpu->regs[ra] == -1) && (imm == INT32_MIN)) ||
+                     ((cpu->regs[ra] == INT32_MIN) && (imm == -1));
+    if (!cpu->overflow) {
+        cpu->regs[ra] *= imm;
     }
     return 0;
 }
@@ -246,16 +247,16 @@ cpu_muli(struct cpu *self, enum reg ra, int imm)
  *       modificado y \ref cpu::div_by_zero será true.
  */
 int32_t
-cpu_div(struct cpu *self, enum reg ra, enum reg rb)
+cpu_div(enum reg ra, enum reg rb)
 {
     if (ra >= REG_LIMIT || rb >= REG_LIMIT) {
         return 1;
     }
-    if (self->regs[rb] == 0) {
-        self->div_by_zero = true;
+    if (cpu->regs[rb] == 0) {
+        cpu->div_by_zero = true;
     }
     else {
-        self->regs[ra] /= self->regs[rb];
+        cpu->regs[ra] /= cpu->regs[rb];
     }
     return 0;
 }
@@ -271,16 +272,16 @@ cpu_div(struct cpu *self, enum reg ra, enum reg rb)
  *       modificado y \ref cpu::div_by_zero será true.
  */
 int32_t
-cpu_divi(struct cpu *self, enum reg ra, int imm)
+cpu_divi(enum reg ra, int imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
     if (imm == 0) {
-        self->div_by_zero = true;
+        cpu->div_by_zero = true;
     }
     else {
-        self->regs[ra] /= imm;
+        cpu->regs[ra] /= imm;
     }
     return 0;
 }
@@ -295,14 +296,14 @@ cpu_divi(struct cpu *self, enum reg ra, int imm)
  *       \ref cpu::overflow será true.
  */
 int32_t
-cpu_inc(struct cpu *self, enum reg ra, int32_t imm)
+cpu_inc(enum reg ra, int32_t imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->overflow = (self->regs[ra] == INT32_MAX);
-    if (!self->overflow) {
-        self->regs[ra] += 1;
+    cpu->overflow = (cpu->regs[ra] == INT32_MAX);
+    if (!cpu->overflow) {
+        cpu->regs[ra] += 1;
     }
     return 0;
 }
@@ -317,14 +318,14 @@ cpu_inc(struct cpu *self, enum reg ra, int32_t imm)
  *       \ref cpu::overflow será true.
  */
 int32_t
-cpu_dec(struct cpu *self, enum reg ra, int32_t imm)
+cpu_dec(enum reg ra, int32_t imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->overflow = (self->regs[ra] == INT32_MIN);
-    if (!self->overflow) {
-        self->regs[ra] -= 1;
+    cpu->overflow = (cpu->regs[ra] == INT32_MIN);
+    if (!cpu->overflow) {
+        cpu->regs[ra] -= 1;
     }
     return 0;
 }
@@ -339,7 +340,7 @@ cpu_dec(struct cpu *self, enum reg ra, int32_t imm)
  * necesitarse.
  */
 int32_t
-cpu_nop(struct cpu *self, enum reg ra, int32_t imm)
+cpu_nop(enum reg ra, int32_t imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
@@ -354,16 +355,16 @@ cpu_nop(struct cpu *self, enum reg ra, int32_t imm)
  * \ref cpu::halt
  */
 int32_t 
-cpu_end(struct cpu *self, enum reg ra, int32_t imm)
+cpu_end(enum reg ra, int32_t imm)
 {
     if (ra >= REG_LIMIT) {
         return 1;
     }
-    self->halt = true;
+    cpu->halt = true;
     return 0;
 }
 
-enum cpu_event cpu_next_cycle(struct cpu *self);
+enum cpu_event cpu_next_cycle(void);
 
 /**
  * \brief Inicializa a una nueva CPU con sus valores predeterminados
@@ -392,6 +393,13 @@ cpu_new(void)
     return new_cpu;
 }
 
+void 
+cpu_init(void)
+{
+    cpu = cpu_new();
+    assert(cpu);
+}
+
 /**
  * \brief Reinicia la CPU, volviedola a su estado inicial
  * 
@@ -403,12 +411,12 @@ cpu_new(void)
  * \sa cpu_load_insts_from_str()
  */
 int32_t
-cpu_reset(struct cpu *self)
+cpu_reset()
 {
-    memset(self->regs, 0, sizeof(self->regs));
-    self->halt = true;
-    self->div_by_zero = false;
-    self->overflow = false;
+    memset(cpu->regs, 0, sizeof(cpu->regs));
+    cpu->halt = true;
+    cpu->div_by_zero = false;
+    cpu->overflow = false;
     return 0;
 }
 
@@ -421,7 +429,7 @@ cpu_reset(struct cpu *self)
  * 
 
 static int32_t 
-cpu_parse_and_load_inst(struct cpu *self, const char *inst_str, 
+cpu_parse_and_load_inst(const char *inst_str, 
                               size_t *instmem_end)
 {
     if (*instmem_end >= INSTS_MAX) {
@@ -451,7 +459,7 @@ cpu_parse_and_load_inst(struct cpu *self, const char *inst_str,
         is_end = true;
     }
     
-    self->instmem[*instmem_end] = *tmp;
+    cpu->instmem[*instmem_end] = *tmp;
     free(tmp);
     (*instmem_end) += 1;
     
@@ -468,38 +476,38 @@ cpu_parse_and_load_inst(struct cpu *self, const char *inst_str,
  * esté lista. Es requerido que instmem ya esté inicializado con anterioridad
  * caso contrario esta función no hará nada útil.
  * 
- * \param self cpu a preparar
+ * \param cpu cpu a preparar
  */
 static void
-cpu_prepare(struct cpu *self)
+cpu_prepare(void)
 {
     /** TODO: Hacer esta verificación en tiempo de compilación.
      *        Esta verificación es realizada debido a que IR es un int64_t y la
      *        estructura inst está hecha de forma que ocupe menos de 64 bits,
      *        verificamos por si acaso que esta quepa sin problemas
      */
-    //assert(sizeof(self->instmem[0]) <= sizeof(self->regs[REG_IR]));
+    //assert(sizeof(cpu->instmem[0]) <= sizeof(cpu->regs[REG_IR]));
 
     /**
      * Cargamos primer instrucción y actualizamos PC para que apunte a
      * siguiente instrucción.
      */
-    memset(&self->regs[REG_IR], 0, sizeof(self->regs[REG_IR]));
+    memset(&cpu->regs[REG_IR], 0, sizeof(cpu->regs[REG_IR]));
     struct inst inst = mmu_get_inst(0);
-    memcpy(&self->regs[REG_IR], &inst, sizeof(inst));
-    self->regs[REG_PC] = 1;
+    memcpy(&cpu->regs[REG_IR], &inst, sizeof(inst));
+    cpu->regs[REG_PC] = 1;
 
     /**
      * El "ciclo cero" es realizado al momento de instanciar la CPU.
      * Esto permite dar un delay y que la primera instrucción no sea
      * ejecutada inmediatamente.
      */
-    clock_gettime(CLOCK_MONOTONIC, &self->last_cycle);
+    clock_gettime(CLOCK_MONOTONIC, &cpu->last_cycle);
 
     /**
      * Habilitamos la CPU para ejecutarse
      */
-    self->halt = false;
+    cpu->halt = false;
 }
 
 /**
@@ -508,7 +516,7 @@ cpu_prepare(struct cpu *self)
  * Toma el archiivo especificado y lo carga para su procesamiento en la CPU,
  * cargar las instrucciones será un paso necesario para poder ejecutar la CPU.
  * 
- * \param self la CPU a manipular
+ * \param cpu la CPU a manipular
  * \param filename el nombre del archivo a cargar
  * 
  * \return Si hubo error al cargar las instrucciones desde el archivo:
@@ -516,9 +524,9 @@ cpu_prepare(struct cpu *self)
  *         2 se llenó la memoria de instrucciones.
  *
 int32_t
-cpu_load_insts_from_file(struct cpu *self, const char *filename)
+cpu_load_insts_from_file(const char *filename)
 {
-    if (!self || !filename) { return -1; }
+    if (!cpu || !filename) { return -1; }
     FILE *instfile = fopen(filename, "r");
     if (!instfile) {
         return 2;
@@ -536,14 +544,14 @@ cpu_load_insts_from_file(struct cpu *self, const char *filename)
         for (size_t i = 0; buf[i] != '\0'; i += 1) {
             buf[i] = toupper(buf[i]);
         }
-        int32_t result = cpu_parse_and_load_inst(self, buf, &instmem_end);
+        int32_t result = cpu_parse_and_load_inst(cpu, buf, &instmem_end);
         if (result == 1) {
             return 1;
         } else if (result == 2) {
             end_found = true;
         }
     }
-    cpu_prepare(self);
+    cpu_prepare(cpu);
     return 0;
 }
     */
@@ -554,9 +562,9 @@ cpu_load_insts_from_file(struct cpu *self, const char *filename)
  *          esta no puede ser una cadena literal sino un arreglo.
  *
 int32_t
-cpu_load_insts_from_str(struct cpu *self, char *str)
+cpu_load_insts_from_str(char *str)
 {
-    if (!self || !str) { return -1; }
+    if (!cpu || !str) { return -1; }
     for (size_t i = 0; str[i] != '\0'; i += 1) {
         str[i] = toupper(str[i]);
     }
@@ -574,22 +582,22 @@ cpu_load_insts_from_str(struct cpu *self, char *str)
          *
         return 2;
     }
-    int32_t result = cpu_parse_and_load_inst(self, whole_inst_tok, &instmem_end);
+    int32_t result = cpu_parse_and_load_inst(cpu, whole_inst_tok, &instmem_end);
     if (result == 1) {
         return 1;
     } else if (result == 2) {
-        cpu_prepare(self);
+        cpu_prepare(cpu);
         return 0;
     }
     while ((whole_inst_tok = strtok_r(NULL, "\n", &str_state))) {
-        result = cpu_parse_and_load_inst(self, whole_inst_tok, &instmem_end);
+        result = cpu_parse_and_load_inst(cpu, whole_inst_tok, &instmem_end);
         if (result == 1) {
             return 1;
         } else if (result == 2) {
             break;
         }
     }
-    cpu_prepare(self);
+    cpu_prepare(cpu);
     return 0;
 }
 */
@@ -601,7 +609,7 @@ cpu_load_insts_from_str(struct cpu *self, char *str)
  * instrucciones y actualiza el estado interno de la CPU.
  * \note Tras ejecutar esta función puede que la CPU emita una señal de advertencia
  *       para ello ver los miembros \ref cpu::div_by_zero y \ref cpu::overflow.
- * \param self la CPU a manipular
+ * \param cpu la CPU a manipular
  * \param inst la instrucción a ejecutar
  * \return Si la instrucción está malformada o si algún parámetro lo está
  * 
@@ -611,15 +619,15 @@ cpu_load_insts_from_str(struct cpu *self, char *str)
  *       cambios.
  */
 int32_t
-cpu_execute(struct cpu *self, struct inst *inst)
+cpu_execute(struct inst *inst)
 {
-    if (!self || !inst || inst->op >= OP_LIMIT) {
+    if (!cpu || !inst || inst->op >= OP_LIMIT) {
         return 2;
     }
     if (inst->op >= OP_INC && inst->op <= OP_LIMIT) {
-        return ops[inst->op].imm(self, inst->ra, inst->imm);
+        return ops[inst->op].imm(inst->ra, inst->imm);
     } else {
-        return ops[inst->op].reg_to_reg(self, inst->ra, inst->rb);
+        return ops[inst->op].reg_to_reg(inst->ra, inst->rb);
     }
 }
 
@@ -632,38 +640,38 @@ cpu_execute(struct cpu *self, struct inst *inst)
  *         hubo algún problema.
  */
 enum cpu_event
-cpu_next_cycle(struct cpu *self)
+cpu_next_cycle(void)
 {
     enum cpu_event ocurred_event;
-    if (!self) { return -1; }
-    if (self->halt) {
+    if (!cpu) { return -1; }
+    if (cpu->halt) {
         return CPU_NONE;
     }
-    if (!self->halt) {
+    if (!cpu->halt) {
         /**
          * Cargamos la siguiente instrucción a ejecutar en el IR y movemos el
          * PC a la siguiente siguiente instrucción.
          */
-        memset(&self->regs[REG_IR], 0, sizeof(self->regs[REG_IR]));
-        struct inst inst = mmu_get_inst(self->regs[REG_PC]);
-        memcpy(&self->regs[REG_IR], &inst, sizeof(inst));
-        self->regs[REG_PC] += 1;
+        memset(&cpu->regs[REG_IR], 0, sizeof(cpu->regs[REG_IR]));
+        struct inst inst = mmu_get_inst(cpu->regs[REG_PC]);
+        memcpy(&cpu->regs[REG_IR], &inst, sizeof(inst));
+        cpu->regs[REG_PC] += 1;
     }
     /* Cargamos la instrucción de IR para su ejecución */
-    struct inst *inst = (struct inst *)&self->regs[REG_IR];
+    struct inst *inst = (struct inst *)&cpu->regs[REG_IR];
     if (inst) {
-        ocurred_event = (cpu_execute(self, inst) == 1)? CPU_INSTRUCTION_INVALID
+        ocurred_event = (cpu_execute(inst) == 1)? CPU_INSTRUCTION_INVALID
                                                       : CPU_INSTRUCTION_EXECUTED;
-        if (self->halt == 1) {
+        if (cpu->halt == 1) {
             ocurred_event = CPU_HALT;
         }
-        if (self->div_by_zero == true) {
+        if (cpu->div_by_zero == true) {
             ocurred_event = CPU_DIVISION_BY_ZERO;
-            self->div_by_zero = false;
+            cpu->div_by_zero = false;
         }
-        if (self->overflow == true) {
+        if (cpu->overflow == true) {
             ocurred_event = CPU_REGISTER_OVERFLOW;
-            self->overflow = false;
+            cpu->overflow = false;
         } 
     } else {
         ocurred_event = CPU_INSTRUCTION_INVALID;
@@ -686,39 +694,38 @@ cpu_next_cycle(struct cpu *self)
  *       tampoco sea posible pasarse del quantum especificado en el sistema
  *       operativo. 
  *
- * \param cpu la CPU a manipular
  * \return Si la CPU se ha actualizado internamente desde el último llamado a
  *         cpu_sync()
  */
 int32_t
-cpu_sync(struct cpu *self)
+cpu_sync(void)
 {
-    if (self->halt) {
+    if (cpu->halt) {
         return 0;
     }
     struct timespec current;
     clock_gettime(CLOCK_MONOTONIC, &current);
     struct timespec delta = {
-        .tv_sec = current.tv_sec - self->last_cycle.tv_sec,
-        .tv_nsec = current.tv_nsec - self->last_cycle.tv_nsec
+        .tv_sec = current.tv_sec - cpu->last_cycle.tv_sec,
+        .tv_nsec = current.tv_nsec - cpu->last_cycle.tv_nsec
     };
     uint32_t missed_cycles =
         (delta.tv_sec + ((double)delta.tv_nsec / 1E9)) /
-        (self->target_freq.tv_sec + ((double)self->target_freq.tv_nsec / 1E9));
+        (cpu->target_freq.tv_sec + ((double)cpu->target_freq.tv_nsec / 1E9));
     /**
      * La CPU ejecutará a lo mucho 1 ciclo, por lo que la frecuencia quedará
      * limitada a la frecuencia con que se llama cpu_sync()
      */
     missed_cycles = (missed_cycles)? 1: 0;
     if (missed_cycles) {
-        self->last_cycle = current;
+        cpu->last_cycle = current;
         /**
          * Al sincronizar vamos a ejecutar la cantidad de ciclos que nos hemos
          * perdido entre cada sincronización.
          */
         for (uint32_t i = 0; i < missed_cycles; i += 1) {
-            enum cpu_event event = cpu_next_cycle(self);
-            queue_enqueue(self->events, event);
+            enum cpu_event event = cpu_next_cycle();
+            queue_enqueue(cpu->events, event);
             if (event == CPU_HALT) {
                 break;
             }
@@ -731,16 +738,16 @@ cpu_sync(struct cpu *self)
 /**
  * \brief Establece la frecuencia de operación de la CPU
  *
- * \param self CPU a manipular
+ * \param cpu CPU a manipular
  * \param freq Frecuencia en Hz
  */
 void
-cpu_set_freq(struct cpu *self, double freq)
+cpu_set_freq(double freq)
 {
     double period = 1 / freq;
 
-    self->target_freq.tv_sec = period;
-    self->target_freq.tv_nsec = (period - self->target_freq.tv_sec)*1E9;
+    cpu->target_freq.tv_sec = period;
+    cpu->target_freq.tv_nsec = (period - cpu->target_freq.tv_sec)*1E9;
 }
 
 /**
@@ -750,9 +757,9 @@ cpu_set_freq(struct cpu *self, double freq)
  *         pendientes.
  */
 enum cpu_event 
-cpu_poll_event(struct cpu *self)
+cpu_poll_event(void)
 {
-    return queue_dequeue(self->events);
+    return queue_dequeue(cpu->events);
 }
 
 /**
@@ -761,14 +768,14 @@ cpu_poll_event(struct cpu *self)
  * \return La frecuencia real de la CPU en Hz
  */
 double
-cpu_get_freq(struct cpu *self)
+cpu_get_freq(void)
 {
     /**
      * TODO: Medir la frecuencia real de la CPU y no usar solo la frecuencia 
      *       objetivo
      */
-    return 1 / (self->target_freq.tv_sec +
-        ((double)self->target_freq.tv_nsec / 1E9));
+    return 1 / (cpu->target_freq.tv_sec +
+        ((double)cpu->target_freq.tv_nsec / 1E9));
 }
 
 /**
@@ -780,10 +787,10 @@ cpu_get_freq(struct cpu *self)
  * \sa cpu_load_from_context()
  */
 struct cpu_context
-cpu_dump_context(struct cpu *self)
+cpu_dump_context(void)
 {
     struct cpu_context context;
-    memcpy(context.regs, self->regs, sizeof(self->regs));
+    memcpy(context.regs, cpu->regs, sizeof(cpu->regs));
     return context;
 }
 
@@ -795,24 +802,24 @@ cpu_dump_context(struct cpu *self)
  * para la implementación del algoritmo round-robin, permitiendo retomar la ejecución
  * de un proceso desde el punto donde fue interrumpido.
  *
- * \param self La CPU a manipular
+ * \param cpu La CPU a manipular
  * \param context El contexto previamente guardado con los valores de registros
  * \param instmem El arreglo de instrucciones a cargar en la memoria de instrucciones
  * \return 0 si fue exitoso, < 0 en caso de error
  */
 int32_t
-cpu_load_from_context(struct cpu *self, struct cpu_context context)
+cpu_load_from_context(struct cpu_context context)
 {
-    if (!self) {
+    if (!cpu) {
         return -1;
     }
-    memcpy(self->regs, context.regs, sizeof(self->regs));
-    self->div_by_zero = false;
-    self->overflow = false;
+    memcpy(cpu->regs, context.regs, sizeof(cpu->regs));
+    cpu->div_by_zero = false;
+    cpu->overflow = false;
     
-    clock_gettime(CLOCK_MONOTONIC, &self->last_cycle);
+    clock_gettime(CLOCK_MONOTONIC, &cpu->last_cycle);
     
-    while (cpu_poll_event(self) != CPU_NONE) {}
+    while (cpu_poll_event() != CPU_NONE) {}
     
     return 0;
 }
@@ -822,13 +829,13 @@ cpu_load_from_context(struct cpu *self, struct cpu_context context)
  * 
  * Es requerido llamar esta función para que la CPU comience a ejecutar
  * instrucciones.
- * \param self La CPU a habilitar
+ * \param cpu La CPU a habilitar
  */
 void
-cpu_enable(struct cpu *self)
+cpu_enable(void)
 {
-    if (self) {
-        self->halt = false;
+    if (cpu) {
+        cpu->halt = false;
     }
 }
 
@@ -838,12 +845,11 @@ cpu_enable(struct cpu *self)
  * Esta función es útil para detener la ejecución de la CPU,
  * cuando no hay más instrucciones que ejecutar. Esto usualmente lo decide el
  * sistema operativo cuando ya no hay procesos.
- * \param self La CPU a deshabilitar
  */
 void
-cpu_disable(struct cpu *self)
+cpu_disable(void)
 {
-    if (self) {
-        self->halt = true;
+    if (cpu) {
+        cpu->halt = true;
     }
 }

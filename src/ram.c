@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include <ram.h>
 
 /**
@@ -107,4 +109,10 @@ ram_write(const uint16_t addr, const void *data, const uint16_t size)
 
     memcpy(&ram[addr / WORD_SIZE], data, size);
     return 0;
+}
+
+uint16_t
+ram_frame_to_addr(uint16_t frame_num)
+{
+    return frame_num * WORD_SIZE;
 }

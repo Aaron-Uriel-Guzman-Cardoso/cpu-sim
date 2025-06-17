@@ -9,64 +9,64 @@
 struct queue *
 queue_new(void)
 {
-    struct queue *self = malloc(sizeof(struct queue));
+    struct queue *cpu = malloc(sizeof(struct queue));
     for (int32_t i = 0; i < 128; i += 1) {
-        self->events[i] = CPU_NONE;
+        cpu->events[i] = CPU_NONE;
     }
-    self->head = 0;
-    self->tail = 0;
-    return self;
+    cpu->head = 0;
+    cpu->tail = 0;
+    return cpu;
 }
 
 /**
  * \brief Encola un evento en la cola.
- * \param self Puntero a la cola donde se encolará el evento.
+ * \param cpu Puntero a la cola donde se encolará el evento.
  * \param event Evento que se desea encolar.
  * \return No devuelve ningún valor (void).
  * \details Si la cola está llena, los eventos se sobrescriben.
  */
 void
-queue_enqueue(struct queue *self, enum cpu_event event)
+queue_enqueue(struct queue *cpu, enum cpu_event event)
 {
-    if (!self || event >= CPU_NONE) {
+    if (!cpu || event >= CPU_NONE) {
         return;
     }
-    self->events[self->tail] = event;
-    self->tail = (self->tail + 1) % 128;
+    cpu->events[cpu->tail] = event;
+    cpu->tail = (cpu->tail + 1) % 128;
 }
 
 /**
  * \brief Desencola un evento de la cola.
- * \param self Puntero a la cola de donde se desencolará el evento.
+ * \param cpu Puntero a la cola de donde se desencolará el evento.
  * \return Retorna el evento desencolado o CPU_NONE si la cola está vacía o es inválida.
  * \details Elimina el evento más antiguo de la cola y lo retorna.
  */
 enum cpu_event
-queue_dequeue(struct queue *self)
+queue_dequeue(struct queue *cpu)
 {
-    if (!self) {
+    if (!cpu) {
         return CPU_NONE;
     }
     
     // Verificar si la cola está vacía
-    if (self->head == self->tail) {
+    if (cpu->head == cpu->tail) {
         return CPU_NONE;
     }
     
-    enum cpu_event event = self->events[self->head];
-    self->events[self->head] = CPU_NONE;
-    self->head = (self->head + 1) % 128;
+    enum cpu_event event = cpu->events[cpu->head];
+    cpu->events[cpu->head] = CPU_NONE;
+    cpu->head = (cpu->head + 1) % 128;
     return event;
 }
 
 /**
  * \brief Libera la memoria asignada para la cola.
- * \param self Puntero a la cola que se desea liberar.
+ * \param cpu Puntero a la cola que se desea liberar.
  * \return No devuelve ningún valor (void).
  * \details Libera la memoria de la cola y sus recursos asociados.
  */
 void
-queue_free(struct queue *self)
+queue_free(struct queue *cpu)
 {
-    free(self);
+    free(cpu);
 }

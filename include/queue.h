@@ -21,8 +21,8 @@ struct queue {
 };
 
 struct queue *queue_new(void);
-void queue_enqueue(struct queue *self, enum cpu_event event);
-enum cpu_event queue_dequeue(struct queue *self);
-void queue_free(struct queue *self);
+void queue_enqueue(struct queue *cpu, enum cpu_event event);
+enum cpu_event queue_dequeue(struct queue *cpu);
+void queue_free(struct queue *cpu);
 
 #endif // QUEUE_H

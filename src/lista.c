@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <ctype.h>
+#include <user_control.h>
 
 #include <msg.h>
 #include <cpu.h>
@@ -12,7 +13,7 @@
 #include <lista.h>
 #include <cpu.h>
 
-UserStats user_stats[MAX_USER_STATS];
+
 
 static int globalPID = 1;
 
@@ -53,10 +54,18 @@ PCB
             nuevo_nodo->UID = uid;
             nuevo_nodo->P = PBASE;
             nuevo_nodo->KCPU = 0.0; // Inicializar KCPU a 0.0
-            nuevo_nodo->tmp = NULL; // Inicializar TMP como NULL
-            nuevo_nodo->tmp_size = 0; // Inicializar tamaño de TMP a 0
+            
             nuevo_nodo->program_size = 0; // Inicializar tamaño del programa a 0
-            /* Esperemos que inicialize todo en -1*/
+
+            /**
+             * Dejamos los datos de la TMP como vacíos, pues el diseño del código
+             * no nos permite conocer la cantidad de marcos sino hasta que se 
+             * llama `swap_allocate_frames`.
+             * Nota: puede que este comentario se vuelva impreciso en futuros 
+             *       commits
+             */
+            nuevo_nodo->tmp_rows = NULL;
+            nuevo_nodo->tmp_size = 0;
             
         } else {
             // Si el archivo no se puede abrir, liberar el nodo y retornar NULL
@@ -170,119 +179,6 @@ PCB* listaExtraePrioridad(Lista *l) {
 }
 
 /**
- * \brief Verifica si un usuario existe en el arreglo de usuarios.
- * \param self Puntero al control de usuarios.
- * \param uid UID del usuario que se desea verificar.
- * \return Retorna true si el usuario existe, false en caso contrario.
- */
-bool uc_user_exists(struct user_control *self, uint8_t uid) {
-    if(self->current_users == 0) {
-        return false;
-    }
-    for (int i = 0; i < 256; i++) {
-        if (self->users[i]) {
-            if (self->users[i]->uid == uid) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-
-/**
- * \brief Crea un nuevo usuario.
- * \param uid UID del nuevo usuario.
- * \return Retorna un puntero al nuevo usuario creado o NULL si falla la asignación de memoria.
- */
-User *crearUsuario(uint8_t uid) {
-    User *user = malloc(sizeof(User));
-    if (user) {
-        user->uid = uid;
-        user->KCPUxU = 0.0;
-        user->process_counter = 0;
-    }
-    return user;
-}
-
-/**
- * \brief Busca un usuario en el arreglo de usuarios por su UID.
- * \param self Puntero al control de usuarios.
- * \param uid UID del usuario que se desea buscar.
- * \return Retorna un puntero al usuario encontrado o NULL si no se encuentra.
- */
-User *uc_get_user(struct user_control *self, uint8_t uid) {
-    if(self->current_users == 0) {
-        return NULL;
-    }
-    for (int i = 0; i < 256; i++) {
-        if (self->users[i]) {
-            if (self->users[i]->uid == uid) {
-                return self->users[i];
-            }
-        }
-    }
-    return NULL;
-}
-
-/**
- * \brief Asigna un usuario al arreglo de usuarios.
- * \param self Puntero al control de usuarios.
- * \param user Puntero al usuario que se desea asignar.
- * \return Retorna true si no hay espacio y no se puede asignar el usuario.
- */
-bool
-uc_alloc_user(struct user_control *self, User *user)
-{
-    if (self->current_users == 256) {
-        return true;
-    }
-    for (uint8_t i = 0; i < 256; i += 1) {
-        if (self->users[i] == NULL) {
-            self->users[i] = user;
-            self->current_users += 1;
-            return false;
-        }
-    }
-    return true;
-}
-
-/**
- * \brief Actualiza las estadísticas de un usuario.
- * \param uid UID del usuario que se desea actualizar.
- * \param value Valor a asignar a KCPUxU.
- * \return No devuelve ningún valor (void).
- */
-void update_user_stats(uint8_t uid, float value) {
-    for (int i = 0; i < user_stats_count; i++) {
-        if (user_stats[i].uid == uid) {
-            user_stats[i].KCPUxU = value;
-            return;
-        }
-    }
-    // Si no existe, agregar nuevo
-    if (user_stats_count < MAX_USER_STATS) {
-        user_stats[user_stats_count].uid = uid;
-        user_stats[user_stats_count].KCPUxU = value;
-        user_stats_count++;
-    }
-}
-
-/**
- * \brief Obtiene las estadísticas de un usuario.
- * \param uid UID del usuario que se desea obtener.
- * \return Retorna el valor de KCPUxU del usuario o 0.0 si no se encuentra.
- */
-float get_user_stats(uint8_t uid) {
-    for (int i = 0; i < user_stats_count; i++) {
-        if (user_stats[i].uid == uid) {
-            return user_stats[i].KCPUxU;
-        }
-    }
-    return 0.0f;
-} 
-
-/**
  * \brief Extrae un nodo de la lista por su PID.
  * \param l Puntero a la lista de donde se extraerá el nodo.
  * \param PID PID del proceso que se desea extraer.
@@ -343,42 +239,39 @@ void liberarLista(Lista *l){
 
 /**
  * \brief Convierte la información de un PCB a una cadena de texto.
- * \param self Puntero al PCB que se desea convertir.
+ * \param pcb Puntero al PCB que se desea convertir.
  * \param str Puntero al buffer donde se almacenará la cadena resultante.
  * \param size Tamaño del buffer.
  * \return No devuelve ningún valor (void).
  */
 void 
-pcb_as_str(struct PCB *self, char *str, size_t size, User *user)
+pcb_as_str(struct PCB *pcb, char *str, size_t size)
 {
-    if (!self || !str || size == 0) {
+    if (!pcb || !str || size == 0) {
         return;
     }
     char irstr[50];
-    inst_to_str((struct inst *)&self->context.regs[REG_IR], irstr, sizeof(irstr));
-    if (user) {
-        snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
-            self->PID, self->UID, self->P, self->KCPU, user->KCPUxU, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
-            self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
-    } else {
-        snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
-            self->PID, self->UID, self->P, self->KCPU, 0.0, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
-            self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
-    }
-    
+    inst_to_str((struct inst *)&pcb->context.regs[REG_IR], irstr, sizeof(irstr));
+    User *usr = uc_get_user(pcb->UID);
+    snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f,"
+             " File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
+            pcb->PID, pcb->UID, pcb->P, pcb->KCPU,(usr)? usr->KCPUxU: 0.0,
+            pcb->fileName, pcb->context.regs[REG_AX], pcb->context.regs[REG_BX],
+            pcb->context.regs[REG_CX], pcb->context.regs[REG_DX], 
+            pcb->context.regs[REG_PC], irstr);
 }
 
 void 
-pcb_as_str_kcpuxu(struct PCB *self, char *str, size_t size, float kcpuxu)
+pcb_as_str_kcpuxu(struct PCB *pcb, char *str, size_t size, float kcpuxu)
 {
-    if (!self || !str || size == 0) {
+    if (!pcb || !str || size == 0) {
         return;
     }
     char irstr[50];
-    inst_to_str((struct inst *)&self->context.regs[REG_IR], irstr, sizeof(irstr));
+    inst_to_str((struct inst *)&pcb->context.regs[REG_IR], irstr, sizeof(irstr));
     snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
-    self->PID, self->UID, self->P, self->KCPU, kcpuxu, self->fileName, self->context.regs[REG_AX], self->context.regs[REG_BX],
-    self->context.regs[REG_CX], self->context.regs[REG_DX], self->context.regs[REG_PC], irstr);
+    pcb->PID, pcb->UID, pcb->P, pcb->KCPU, kcpuxu, pcb->fileName, pcb->context.regs[REG_AX], pcb->context.regs[REG_BX],
+    pcb->context.regs[REG_CX], pcb->context.regs[REG_DX], pcb->context.regs[REG_PC], irstr);
     
 }
 
@@ -395,32 +288,3 @@ pcb_as_str_kcpuxu(struct PCB *self, char *str, size_t size, float kcpuxu)
         names->fin = newName;
     }
 }*/
-
-/**
- * \brief Calcula el peso de un usuario en función de la cantidad de usuarios activos.
- * \param self Puntero al control de usuarios.
- * \return Retorna el peso del usuario.
- */
-double uc_get_weight(struct user_control *self) {
-    return (self->current_users)? 1.0/self->current_users: 0.0;
-}
-
-
-/**
- * \brief Libera el espacio de un usuario, quitándolo de los usuarios activos
- * \param self Puntero al control de usuarios.
- * \param uid UID del usuario que se desea liberar.
- * \return No devuelve ningún valor (void).
- */
-void
-uc_dealloc_user(struct user_control *self, uint8_t uid)
-{
-    for (int i = 0; i < 256; i++) {
-        if (self->users[i] && self->users[i]->uid == uid) {
-            free(self->users[i]);
-            self->users[i] = NULL;
-            self->current_users -= 1;
-            break;
-        }
-    }
-}

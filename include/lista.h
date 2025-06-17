@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <cpu.h>
 
-#define MAX_USER_STATS 256
 #define PBASE 60
 
 typedef struct fileTitle {
@@ -28,50 +27,9 @@ typedef struct PCB {
     int P;
     float KCPU;
     uint16_t program_size;                   // Total de instrucciones del programa
-    /** 
-     * TODO: adecuar el código que crea a PCB para crear a tmp como un flexible
-     *       array member y que el tamaño se guarde como constante.
-     */
-    const uint16_t tmp_size;                   // Tamaño de TMP (marcos usados)
+    uint16_t tmp_size;
     struct {int32_t on_swap; int32_t on_ram} *tmp_rows;       // Datos de la tabla de marcos del proceso (TMP)
 } PCB;
-
-
-typedef struct User {
-    uint8_t uid;
-    float KCPUxU;
-    uint8_t process_counter;
-} User;
-
-typedef struct UserStats {
-    uint8_t uid;
-    float KCPUxU;
-} UserStats;
-
-extern UserStats user_stats[MAX_USER_STATS];
-extern int user_stats_count;
-
-struct user_control {
-    uint8_t current_users;
-    User *users[256];
-};
-
-bool uc_user_exists(struct user_control *self, uint8_t uid);
-User *uc_get_user(struct user_control *self, uint8_t uid);
-bool uc_alloc_user(struct user_control *self, User *user);
-double uc_get_weight(struct user_control *self);
-void uc_dealloc_user(struct user_control *self, uint8_t uid);
-void update_user_stats(uint8_t uid, float value);
-float get_user_stats(uint8_t uid);	
-
-//void update_user_stats(uint8_t uid, float KCPUxU, UserStats *user_stats, int user_stats_count);
-//float get_user_stats(uint8_t uid, UserStats *user_stats, int user_stats_count);
-
-/**
- * \brief Coloca el usuario recién creado en el arreglo de usuarios
- * \return true si no hay espacio y no se puede meter el usuario
- */
-
 
 /**
  * TODO: Implementar una lista genérica que no requiera de PCB como nodo.
@@ -91,12 +49,7 @@ PCB* listaExtraePrioridad(Lista *);
 PCB* listaExtraePID(Lista *, int);
 void liberarNodo(PCB *);
 void liberarLista(Lista *);
-void pcb_as_str(struct PCB *self, char *str, size_t size, User *user);
-void pcb_as_str_kcpuxu(struct PCB *self, char *str, size_t size, float kcpuxu);
-bool uc_alloc_user(struct user_control *self, User *user);
-User *uc_get_user(struct user_control *self, uint8_t uid);
-bool uc_user_exists(struct user_control *self, uint8_t uid);
-double uc_get_weight(struct user_control *self);
-User *crearUsuario(uint8_t uid);
+void pcb_as_str(struct PCB *cpu, char *str, size_t size);
+void pcb_as_str_kcpuxu(struct PCB *cpu, char *str, size_t size, float kcpuxu);
 
 #endif // LISTA_H

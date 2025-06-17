@@ -53,15 +53,15 @@ struct cpu {
                                       de la CPU */
 };
 
-struct cpu *cpu_new(void);
-int32_t cpu_reset(struct cpu *self);
-struct cpu_context cpu_dump_context(struct cpu *self);
-void cpu_set_freq(struct cpu *self, double freq);
-double cpu_get_freq(struct cpu *self);
-int32_t cpu_sync(struct cpu *self);
-enum cpu_event cpu_poll_event(struct cpu *self);
-int32_t cpu_load_from_context(struct cpu *self, struct cpu_context context);
-void cpu_enable(struct cpu *self);
-void cpu_disable(struct cpu *self);
+void cpu_init(void);
+int32_t cpu_reset(void);
+struct cpu_context cpu_dump_context(void);
+void cpu_set_freq(double freq);
+double cpu_get_freq(void);
+int32_t cpu_sync(void);
+enum cpu_event cpu_poll_event(void);
+int32_t cpu_load_from_context(struct cpu_context context);
+void cpu_enable(void);
+void cpu_disable(void);
 
 #endif

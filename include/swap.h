@@ -34,7 +34,7 @@ int swap_calculate_frames(int program_size);
 bool swap_display_frame(WINDOW *win, int frame_num);
 void swap_display_map(WINDOW *win);
 int swap_get_free_frame_count();
-bool has_brothers(PCB *pcb, Lista *listos, Lista *ejecucion);
+bool has_brothers(PCB *pcb, Lista *proc_ready, Lista *proc_running);
 
 
 #endif

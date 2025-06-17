@@ -7,6 +7,8 @@
 #include <msg.h>
 #include <time.h>
 #include <unistd.h>
+#include <assert.h>
+
 
 // Archivo SWAP global
 static FILE *swapfile = NULL;
@@ -26,9 +28,7 @@ void swap_init() {
     
     // Inicializar con ceros
     char zero = 0;
-    for (int i = 0; i < SWAP_WORD_SIZE * WORD_SIZE; i++) {
-        fwrite(&zero, 1, 1, swapfile);
-    }
+    fwrite(&zero, 1, SWAP_TOTAL_BYTE_SIZE, swapfile);
     fflush(swapfile);
     
     // Inicializar TMS
@@ -74,13 +74,13 @@ int swap_allocate_frames(PCB *pcb) {
     if (frames_needed >= SWAP_NUM_PAGES) {
         return -1;
     }
-    pcb->tmp = malloc(frames_needed * sizeof(*pcb->tmp));
+    pcb->tmp_rows = malloc(frames_needed * sizeof(*pcb->tmp_rows));
     pcb->tmp_size = 0;
 
     for (int i = 0; i < SWAP_NUM_PAGES && pcb->tmp_size < frames_needed; i++) {
         if (swap_map[i].pid == 0) {
             swap_map[i].pid = pcb->PID;
-            pcb->tmp[pcb->tmp_size++] = i;
+            pcb->tmp_rows[pcb->tmp_size++].on_swap = i;
         }
     }
     
@@ -97,7 +97,7 @@ void swap_free_frames(PCB *pcb) {
     /**
      * TODO: Verificar y modificar el PID cuando el hermano original tenga que ser   
      */
-    PCB *brother = os_find_brother(pcb);
+    PCB *brother = os_find_sibling(pcb);
     if (brother) {
         for (int i = 0; i < brother->tmp_size; i++) {
             swap_map[i].pid = brother->PID;
@@ -105,10 +105,10 @@ void swap_free_frames(PCB *pcb) {
     }
     else {
         for (int i = 0; i < pcb->tmp_size; i++) {
-            swap_map[pcb->tmp[i]].pid = 0;
+            swap_map[pcb->tmp_rows[i].on_swap].pid = 0;
         }
     }
-    free(pcb->tmp);
+    free(pcb->tmp_rows);
 }
 
 /**
@@ -171,14 +171,14 @@ int32_t
 swap_load_program1(PCB *pcb, const char *filename)
 {
     PCB *brother;
-    if((brother = os_find_brother(pcb)) != NULL) {
-        pcb->tmp = malloc(brother->tmp_size * sizeof(*pcb->tmp));
-        memcpy(pcb->tmp, brother->tmp, brother->tmp_size * sizeof(*pcb->tmp));
+    if((brother = os_find_sibling(pcb)) != NULL) {
+        pcb->tmp_rows = malloc(brother->tmp_size * sizeof(*pcb->tmp_rows));
+        memcpy(pcb->tmp_rows, brother->tmp_rows, brother->tmp_size * sizeof(*pcb->tmp_rows));
         pcb->tmp_size = brother->tmp_size;
         return 2;
     }
     FILE *program = fopen(filename, "r");
-    if ((pcb->program_size = count_instructions_in_file(program)) >= SWAP_WORD_SIZE) {
+    if ((pcb->program_size = count_instructions_in_file(program)) >= WORD_SIZE) {
         fclose(program);
         return -1; // El programa es demasiado grande para la memoria swap
     }
@@ -208,7 +208,7 @@ swap_load_program1(PCB *pcb, const char *filename)
                     clock_nanosleep(CLOCK_MONOTONIC, 0, &update_delay, NULL);*/
                     //usleep(2);
                 }
-                long real_addr = (pcb->tmp[i] * SWAP_PAGE_SIZE + j) * WORD_SIZE;
+                long real_addr = (pcb->tmp_rows[i].on_swap * SWAP_PAGE_SIZE + j) * WORD_SIZE;
                 fseek(swapfile, real_addr, SEEK_SET);
                 fwrite(&inst, WORD_SIZE, 1, swapfile);
             }
@@ -231,9 +231,10 @@ swap_load_program1(PCB *pcb, const char *filename)
  * Nota: no se realiza ninguna verificación de que la página esté realmente
  *       siendo usada, esta función puede regresar basura si no es usada
  *       adecuadamente.
+ * Nota 2: tampoco se verifica que dst tenga el tamaño mínimo adecuado.
  * 
- * \param dst Arreglo de destino donde se van a cargar todas las palabras
- *            leidas de la memoria SWAP
+ * \param dst Arreglo del tipo word_t[SWAP_PAGE_SIZE] de destino donde se van
+ *            a cargar todas las palabras leidas de la memoria SWAP.
  * \param page_index Índice de la página que se obtendrá de swap.
  * \return Si hubo algún problema al ejecutar: 0 si no hubo problema alguno y
  *         el resultado fue guardado en dst, 1 si la página no existe,
@@ -250,8 +251,7 @@ swap_get_page(word_t dst[SWAP_PAGE_SIZE], uint16_t page_index)
         return 1;
     }
     fseek(swapfile, byte_addr, SEEK_SET);
-    assert((SWAP_PAGE_SIZE * WORD_SIZE) == sizeof(dst)); /** TODO: mover a lugar adecuado */
-    fread(dst, sizeof(dst), 1, swapfile);
+    fread(dst, sizeof(dst) * SWAP_PAGE_SIZE, 1, swapfile);
     return 0;
 }
 
