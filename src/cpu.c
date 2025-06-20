@@ -398,7 +398,6 @@ cpu_init(void)
 {
     cpu = cpu_new();
     assert(cpu && """CPU no pudo ser inicializada.");
-    cpu_prepare();
 }
 
 /**

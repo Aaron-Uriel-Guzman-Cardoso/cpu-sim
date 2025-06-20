@@ -333,6 +333,8 @@ os_process_handler(void)
             } else {
                 msg_log(LOG_LEVEL_INFO, "Evento no reconocido.\n");
             }
+            tui_curr_proc_update();
+            tui_processes_update();
         }
 
         /**
