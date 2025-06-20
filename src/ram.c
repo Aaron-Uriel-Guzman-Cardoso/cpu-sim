@@ -114,5 +114,5 @@ ram_write(const uint16_t addr, const void *data, const uint16_t size)
 uint16_t
 ram_frame_to_addr(uint16_t frame_num)
 {
-    return frame_num * WORD_SIZE;
+    return frame_num * WORD_SIZE * RAM_FRAME_SIZE;
 }

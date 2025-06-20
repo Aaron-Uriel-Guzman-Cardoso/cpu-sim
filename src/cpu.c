@@ -47,6 +47,7 @@ int32_t cpu_inc(enum reg ra, int32_t imm);
 int32_t cpu_dec(enum reg ra,  int32_t imm);
 int32_t cpu_nop(enum reg ra,  int32_t imm);
 int32_t cpu_end(enum reg ra,  int32_t imm);
+//int32-t cpu_jnz(enum reg ra, int32_t imm);
 
 /**
  * \brief Todas las instrucciones que podrá ejecutar la CPU
@@ -59,7 +60,7 @@ union op_fn ops[OP_LIMIT] = {
     { .reg_to_reg = cpu_mul}, { .reg_to_reg = cpu_div }, { .imm = cpu_inc },
     { .imm = cpu_dec }, { .imm = cpu_nop }, {.imm = cpu_end }, {.imm = cpu_movi },
     { .imm = cpu_addi }, { .imm = cpu_subi }, { .imm = cpu_muli },
-    { .imm = cpu_divi }
+    { .imm = cpu_divi }//, { .imm = cpu_jmz}
 };
 
 /**
@@ -363,6 +364,21 @@ cpu_end(enum reg ra, int32_t imm)
     cpu->halt = true;
     return 0;
 }
+
+/**
+ * \brief Salta a la instrucción en la dirección 'imm' si CX no es cero.
+ *
+ * El registro 'ra' no se utiliza en esta instrucción, pero se mantiene en
+ * la firma para que coincida con el puntero de función esperado.
+ */
+/*int32_t
+cpu_jnz(enum reg ra, int32_t imm)
+{
+    if (cpu->regs[REG_CX] != 0) {
+        cpu->regs[REG_PC] = imm;
+    }
+    return 0;
+}*/
 
 enum cpu_event cpu_next_cycle(void);
 

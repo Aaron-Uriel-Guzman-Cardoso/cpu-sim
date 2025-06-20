@@ -234,7 +234,10 @@ op_from_str(const char *str, bool is_immediate)
     }
     else if (strncmp(str, "NOP", 3) == 0) {
         return OP_NOP;
-    }
+    }/*
+    if (strcmp(str, "JMZ") == 0) {
+        return OP_JMZ;
+    }*/
     else {
         /*
          * Operación que no existe en caso de que no se haya hecho match con
