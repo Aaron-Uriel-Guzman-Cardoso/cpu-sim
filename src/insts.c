@@ -14,54 +14,62 @@ enum reg reg_from_str(const char *str);
 enum op op_from_str(const char *str, bool is_immediate);
 
 /**
- * \brief Convierte una cadena de texto en una estructura de instrucción.
- * \param buf Cadena de texto que contiene la instrucción a convertir.
- * \return Retorna un puntero a la estructura `inst` creada o NULL si la conversión falla.
- * \details Analiza la cadena de entrada, extrae el nombre de la operación y los argumentos,
- *         y los convierte en una estructura de instrucción válida.
+ * \brief Convierte una cadena de texto con la instrucción en una instrucción
+ *        legible por la CPU.
+ * 
+ * Esta función realiza un poco de análisis léxico y sintáctico para la
+ * verificación de que la instrucción es válida, una vez tokenizada a las
+ * operaciones y argumentos adecuados se crea una estructura de instrucción.
+ * 
+ * \param buf Cadena de texto que contiene una instrucción a convertir.
+ * \return Apuntador a la nueva instrucción, NULL si la conversión falla.
  */
 struct inst *
-inst_from_str(const char *buf)
+inst_from_str(char *buf)
 {
     if (!buf || buf[0] == '\0') {
         return NULL;
     }
-    char name[5], arg1[5];
-    char arg2[11]; /* arg2 puede ser un número de hasta 10 dígitos*/
-    int32_t args = sscanf(buf, "%4s %4s %10s", name, arg1, arg2);
+    for (int i = 0; buf[i] != '\0'; i++) {
+        buf[i] = toupper((unsigned char)buf[i]);
+    }
+    
+    /**
+     * Tokenizar es mejor que usar sscanf, no tenemos que manejar tantos
+     * casos especiales con caracteres raros.
+     */
+    char *saveptr;
+    char *name = strtok_r(buf, " \t\r\n", &saveptr);
+    char *arg1 = strtok_r(NULL, " \t\r\n", &saveptr);
+    char *arg2 = strtok_r(NULL, " \t\r\n", &saveptr);
+    char *arg3 = strtok_r(NULL, " \t\r\n", &saveptr);
+    /**
+     * Sin ningún token o con demasiados, marcamos error.
+     */
+    if (!name || arg3) {
+        return NULL;
+    }
+
     struct inst *new_inst = malloc(sizeof(*new_inst));
-
-    for (int i = 0; i < 4 && name[i] != '\0'; i++) {
-        name[i] = toupper((unsigned char)name[i]);
-    }
-    for (int i = 0; i < 4 && arg1[i] != '\0'; i++) {
-        arg1[i] = toupper((unsigned char)arg1[i]);
-    }
-    for (int i = 0; i < 4 && name[i] != '\0'; i++) {
-        arg2[i] = toupper((unsigned char)arg1[i]);
-    }
-
-
+    memset(new_inst, 0, sizeof(*new_inst)); /*< Evitamos basura en espacio no usado*/
     if (new_inst) {
-        if (args == 1 || args == 2) {
+        if (!arg1) {
             new_inst->op = op_from_str(name, true);
             if (new_inst->op == OP_LIMIT) {
                 goto err;
             }
-            new_inst->ra = REG_AX;
         }
-        if (args >= 2) {
+        else if (!arg2) {
+            new_inst->op = op_from_str(name, true);
+            if (new_inst->op == OP_LIMIT) {
+                goto err;
+            }
             new_inst->ra = reg_from_str(arg1);
             if (new_inst->ra == REG_LIMIT) {
                 goto err;
             }
-            /*
-             * Inicializamos con cero en caso de que la instrucción sea de
-             * solamente dos argumentos o inmediata.
-             */
-            new_inst->imm = 0;
         }
-        if (args == 3) {
+        else {
             /**
              * Verificamos que arg2 sea o no un número:
              * - En caso de no serlo strtol debería de no mover el apuntador
@@ -79,18 +87,26 @@ inst_from_str(const char *buf)
             if (tmp > INT32_MAX || tmp < INT32_MIN) {
                 goto err;
             }
-            new_inst->imm = tmp;
-            if (end == arg2 || *end != '\0') {
+            bool is_number = (end != arg2 && *end == '\0');
+            if (!is_number) {
                 new_inst->op = op_from_str(name, false);
                 if (new_inst->op == OP_LIMIT) {
                     goto err;
                 }
                 new_inst->rb = reg_from_str(arg2);
+                if (new_inst->rb == REG_LIMIT) {
+                    goto err;
+                }
             } else {
                 new_inst->op = op_from_str(name, true);
                 if (new_inst->op == OP_LIMIT) {
                     goto err;
                 }
+                new_inst->imm = (int32_t)tmp;
+            }
+            new_inst->ra = reg_from_str(arg1);
+            if (new_inst->ra == REG_LIMIT) {
+                goto err;
             }
         }
     }
@@ -216,6 +232,9 @@ op_from_str(const char *str, bool is_immediate)
     else if (strncmp(str, "END", 3) == 0) {
         return OP_END;
     }
+    else if (strncmp(str, "NOP", 3) == 0) {
+        return OP_NOP;
+    }
     else {
         /*
          * Operación que no existe en caso de que no se haya hecho match con
@@ -263,6 +282,9 @@ op_to_str(enum op op, char *str, size_t size_t)
         break;
     case OP_END:
         snprintf(str, size_t, "END");
+        break;
+    case OP_NOP:
+        snprintf(str, size_t, "NOP");
         break;
     default:
         snprintf(str, size_t, "LIMIT");

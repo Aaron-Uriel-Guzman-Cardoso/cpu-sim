@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <cpu.h>
+#include <prog.h>
+
 
 #define PBASE 60
 
@@ -20,13 +22,11 @@ typedef struct fileList {
 typedef struct PCB {
     struct cpu_context context;
     uint32_t PID;
-    char fileName[256];
-    FILE *programa;
+    struct prog *program;               // Programa asociado al proceso
     struct PCB *sig;
     uint8_t UID;
     int P;
     float KCPU;
-    uint16_t program_size;                   // Total de instrucciones del programa
     uint16_t tmp_size;
     struct {int32_t on_swap; int32_t on_ram} *tmp_rows;       // Datos de la tabla de marcos del proceso (TMP)
 } PCB;
@@ -40,8 +40,8 @@ typedef struct Cabecera {
     unsigned contador;
 } Lista;
 
-void crearLista(Lista *);
-PCB *listaCreaNodo(struct cpu_context context, const char *file_name, uint8_t uid);
+Lista *crearLista();
+PCB *listaCreaNodo(struct prog *prog, uint8_t uid);
 void listaInsertarFinal(Lista *, PCB *);
 PCB* listaBuscarPID(Lista *, int);
 PCB* listaExtraeInicio(Lista *);

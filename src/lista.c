@@ -6,6 +6,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <user_control.h>
+#include <prog.h>
 
 #include <msg.h>
 #include <cpu.h>
@@ -22,9 +23,15 @@ static int globalPID = 1;
  * \param l Puntero a la lista que se desea inicializar.
  * \return No devuelve ningún valor (void).
  */
-void crearLista(Lista *l) {
+Lista *
+crearLista() {
+    Lista *l = malloc(sizeof(*l));
+    if (l == NULL) {
+        return NULL;
+    }
     l -> inicio = l -> fin = NULL;
     l -> contador = 0;
+    return l;
 }
 
 /**
@@ -35,43 +42,34 @@ struct tmp {
 };
 
 /**
- * \brief Crea un nuevo nodo de tipo PCB.
- * \param context Contexto de la CPU para el nuevo nodo.
- * \param file_name Nombre del archivo asociado al proceso.
+ * \brief Crea un nuevo bloque de control de proceso (PCB).
+ * \param prog El programa asociado al proceso.
+ * \param uid El identificador de usuario (UID) del proceso.
  * \return Retorna un puntero al nuevo nodo creado o NULL si falla la asignación de memoria.
  */
-PCB 
-*listaCreaNodo(struct cpu_context context, const char *file_name, uint8_t uid) {
+PCB *
+listaCreaNodo(struct prog *prog, uint8_t uid)
+{
     PCB *nuevo_nodo = (PCB*)malloc(sizeof(PCB));
     if (nuevo_nodo) {
-        nuevo_nodo->context = context;
-        nuevo_nodo->programa = fopen(file_name, "r");
-        if (nuevo_nodo->programa != NULL) {
-            // Solo incrementar el PID si el archivo se abre correctamente
-            nuevo_nodo->PID = globalPID++;
-            strcpy(nuevo_nodo->fileName, file_name);
-            nuevo_nodo->sig = NULL;
-            nuevo_nodo->UID = uid;
-            nuevo_nodo->P = PBASE;
-            nuevo_nodo->KCPU = 0.0; // Inicializar KCPU a 0.0
-            
-            nuevo_nodo->program_size = 0; // Inicializar tamaño del programa a 0
-
-            /**
-             * Dejamos los datos de la TMP como vacíos, pues el diseño del código
-             * no nos permite conocer la cantidad de marcos sino hasta que se 
-             * llama `swap_allocate_frames`.
-             * Nota: puede que este comentario se vuelva impreciso en futuros 
-             *       commits
-             */
-            nuevo_nodo->tmp_rows = NULL;
-            nuevo_nodo->tmp_size = 0;
-            
-        } else {
-            // Si el archivo no se puede abrir, liberar el nodo y retornar NULL
-            free(nuevo_nodo);
-            nuevo_nodo = NULL;
-        }
+        nuevo_nodo->context = (struct cpu_context) { 0 };
+        nuevo_nodo->program = prog;
+        nuevo_nodo->PID = globalPID++;
+        nuevo_nodo->UID = uid;
+        nuevo_nodo->P = PBASE;
+        nuevo_nodo->KCPU = 0.0;
+        nuevo_nodo->sig = NULL;
+        /**
+         * Dejamos los datos de la TMP como vacíos, pues el diseño del código
+         * no nos permite conocer la cantidad de marcos sino hasta que se 
+         * llama `swap_allocate_frames`.
+         * Nota: puede que este comentario se vuelva impreciso en futuros 
+         *       commits
+         * TODO: Hacer que la tmp se inicialice aquí, conociendo los marcos 
+         *       que se ocupan
+         */
+        nuevo_nodo->tmp_rows = NULL;
+        nuevo_nodo->tmp_size = 0;
     }
     return nuevo_nodo;
 }
@@ -220,7 +218,6 @@ PCB* listaExtraePID(Lista *l, int PID) {
  * \return No devuelve ningún valor (void).
  */
 void liberarNodo(PCB *nodo){
-    fclose(nodo -> programa);
     free(nodo);
 }
 
@@ -256,7 +253,7 @@ pcb_as_str(struct PCB *pcb, char *str, size_t size)
     snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f,"
              " File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
             pcb->PID, pcb->UID, pcb->P, pcb->KCPU,(usr)? usr->KCPUxU: 0.0,
-            pcb->fileName, pcb->context.regs[REG_AX], pcb->context.regs[REG_BX],
+            pcb->program->filename, pcb->context.regs[REG_AX], pcb->context.regs[REG_BX],
             pcb->context.regs[REG_CX], pcb->context.regs[REG_DX], 
             pcb->context.regs[REG_PC], irstr);
 }
@@ -270,7 +267,7 @@ pcb_as_str_kcpuxu(struct PCB *pcb, char *str, size_t size, float kcpuxu)
     char irstr[50];
     inst_to_str((struct inst *)&pcb->context.regs[REG_IR], irstr, sizeof(irstr));
     snprintf(str, size, "PID: %d, UID: %d, P: %d, KCPU: %.2f, KCPUxU: %.2f, File: %s, AX: %ld, BX: %ld, CX: %ld, DX: %ld, PC: %ld, IR: %s",
-    pcb->PID, pcb->UID, pcb->P, pcb->KCPU, kcpuxu, pcb->fileName, pcb->context.regs[REG_AX], pcb->context.regs[REG_BX],
+    pcb->PID, pcb->UID, pcb->P, pcb->KCPU, kcpuxu, pcb->program->filename, pcb->context.regs[REG_AX], pcb->context.regs[REG_BX],
     pcb->context.regs[REG_CX], pcb->context.regs[REG_DX], pcb->context.regs[REG_PC], irstr);
     
 }

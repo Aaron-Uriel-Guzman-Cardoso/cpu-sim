@@ -397,7 +397,8 @@ void
 cpu_init(void)
 {
     cpu = cpu_new();
-    assert(cpu);
+    assert(cpu && """CPU no pudo ser inicializada.");
+    cpu_prepare();
 }
 
 /**
@@ -469,16 +470,13 @@ cpu_parse_and_load_inst(const char *inst_str,
 
 /**
  * \brief Realiza preparaciones finales en la CPU para su ejecución
- * 
- * \note Se espera que la memoria de instrucciones ya esté inicializada
  *
- * Realiza la copia de la primera instrucción en instmem a IR para que la CPU
- * esté lista. Es requerido que instmem ya esté inicializado con anterioridad
- * caso contrario esta función no hará nada útil.
+ * Realiza la carga de la primera instrucción hacia la CPU y prepara el timing
+ * para ejecutar instrucciones.
  * 
  * \param cpu cpu a preparar
  */
-static void
+void
 cpu_prepare(void)
 {
     /** TODO: Hacer esta verificación en tiempo de compilación.
@@ -487,6 +485,11 @@ cpu_prepare(void)
      *        verificamos por si acaso que esta quepa sin problemas
      */
     //assert(sizeof(cpu->instmem[0]) <= sizeof(cpu->regs[REG_IR]));
+
+    if (!cpu) {
+        msg_log(LOG_LEVEL_ERROR, "CPU no inicializada.\n");
+        return;
+    }
 
     /**
      * Cargamos primer instrucción y actualizamos PC para que apunte a
@@ -836,6 +839,7 @@ cpu_enable(void)
 {
     if (cpu) {
         cpu->halt = false;
+        clock_gettime(CLOCK_MONOTONIC, &cpu->last_cycle);
     }
 }
 

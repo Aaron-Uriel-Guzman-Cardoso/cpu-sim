@@ -21,14 +21,21 @@ static FrameEntry swap_map[SWAP_NUM_PAGES];
  *
  * Esta función crea o abre el archivo de swap, lo inicializa con ceros.
  */
-
-void swap_init() {
+void
+swap_init()
+{
     // Crear/abrir archivo SWAP
     swapfile = fopen("SWAP.bin", "w+b");
+    if (!swapfile) {
+        msg_log(LOG_LEVEL_ERROR, "Error al abrir el archivo SWAP.bin");
+        exit(EXIT_FAILURE);
+    }
     
     // Inicializar con ceros
-    char zero = 0;
-    fwrite(&zero, 1, SWAP_TOTAL_BYTE_SIZE, swapfile);
+    for (int i = 0; i < SWAP_NUM_PAGES; i++) {
+        word_t zeros[SWAP_PAGE_SIZE] = {0};
+        fwrite(&zeros, WORD_SIZE, SWAP_PAGE_SIZE, swapfile);
+    }
     fflush(swapfile);
     
     // Inicializar TMS
@@ -70,7 +77,7 @@ int swap_calculate_frames(int program_size) {
  * Devuelve 0 si tuvo éxito, -1 si no hay suficientes marcos.
  */
 int swap_allocate_frames(PCB *pcb) {
-    const int frames_needed = swap_calculate_frames(pcb->program_size);
+    const int frames_needed = swap_calculate_frames(pcb->program->length);
     if (frames_needed >= SWAP_NUM_PAGES) {
         return -1;
     }
@@ -82,6 +89,14 @@ int swap_allocate_frames(PCB *pcb) {
             swap_map[i].pid = pcb->PID;
             pcb->tmp_rows[pcb->tmp_size++].on_swap = i;
         }
+    }
+
+    /**
+     * TODO: Hacer que esta inicialización no ocurra aquí en swap, sino en la creación
+     *       del PCB.
+     */
+    for (int i = 0; i < pcb->tmp_size; i++) {
+        pcb->tmp_rows[i].on_ram = -1; // Inicializar en -1 (no está en RAM)
     }
     
     return (pcb->tmp_size == frames_needed) ? 0 : -1;
@@ -161,60 +176,51 @@ int count_instructions_in_file(FILE *file) {
 /**
  * \brief Intenta cargar programa en la memoria swap
  * 
- * Esta función carga un programa desde un archivo de texto a la memoria swap
+ * Esta función carga un programa desde un programa ya cargado en el simulador,
+ * se trata de meter a la memoria swap tras ya haber creado su PCB, y en caso
+ * de no ser posible se notifica.
  * 
  * \returns 0 si el programa se cargó correctamente, 1 si no hay suficientes
- *          marcos disponibles, -1 si el programa que se trata de cargar es
- *          más grande que la memoria swap, 2 si hay un proceso hermano.
+ *          marcos disponibles por ahora, -1 si el programa que se trata de 
+ *          cargar es más grande que la memoria swap, 2 si hay un proceso
+ *          hermano.
  */
 int32_t
-swap_load_program1(PCB *pcb, const char *filename)
+swap_load_prog(PCB *pcb)
 {
-    PCB *brother;
-    if((brother = os_find_sibling(pcb)) != NULL) {
-        pcb->tmp_rows = malloc(brother->tmp_size * sizeof(*pcb->tmp_rows));
-        memcpy(pcb->tmp_rows, brother->tmp_rows, brother->tmp_size * sizeof(*pcb->tmp_rows));
-        pcb->tmp_size = brother->tmp_size;
+    PCB *sibling;
+    if((sibling = os_find_sibling(pcb)) != NULL) {
+        pcb->tmp_rows = malloc(sibling->tmp_size * sizeof(*pcb->tmp_rows));
+        memcpy(pcb->tmp_rows, sibling->tmp_rows, sibling->tmp_size * sizeof(*pcb->tmp_rows));
+        pcb->tmp_size = sibling->tmp_size;
         return 2;
     }
-    FILE *program = fopen(filename, "r");
-    if ((pcb->program_size = count_instructions_in_file(program)) >= WORD_SIZE) {
-        fclose(program);
-        return -1; // El programa es demasiado grande para la memoria swap
-    }
-    char buffer[33];
-
     if (swap_allocate_frames(pcb) < 0) {
-        fclose(program);
-        return 1; // No hay suficientes marcos disponibles
+        return 1;
     }
 
     for (int i = 0; i < pcb->tmp_size; i++) {
-        for (int j = 0; j < SWAP_PAGE_SIZE && j < pcb->program_size; j++) {
-            if (fgets(buffer, 33, program)) {
-                struct inst inst;
-                struct inst *loaded_inst = inst_from_str(buffer);
-                if(loaded_inst){
-                    inst = *loaded_inst;
-                    free(loaded_inst);
-                }
-                else{
-                    msg_log(LOG_LEVEL_ERROR, "Instrucción invalida");
-                    inst.op = OP_END;
-                    /*struct timespec update_delay = {
-                        .tv_sec = 2,
-                        .tv_nsec =0
-                    };
-                    clock_nanosleep(CLOCK_MONOTONIC, 0, &update_delay, NULL);*/
-                    //usleep(2);
-                }
-                long real_addr = (pcb->tmp_rows[i].on_swap * SWAP_PAGE_SIZE + j) * WORD_SIZE;
-                fseek(swapfile, real_addr, SEEK_SET);
-                fwrite(&inst, WORD_SIZE, 1, swapfile);
+        const uint32_t page_start = i * SWAP_PAGE_SIZE;
+        const uint32_t real_byte_addr = page_start * WORD_SIZE;
+
+        /**
+         * Si la página en swap no se pasa del tamaño del programa,
+         * la copiamos entera, caso contario, copiamos solo lo definido
+         * y el resto lo llenamos con NOPs.
+         */
+        if (page_start + SWAP_PAGE_SIZE <= pcb->program->length) {
+            fseek(swapfile, real_byte_addr, SEEK_SET);
+            fwrite(&pcb->program->instmem[page_start], WORD_SIZE, SWAP_PAGE_SIZE, swapfile);
+        } else {
+            const uint32_t remaining_insts = pcb->program->length - page_start;
+            fseek(swapfile, real_byte_addr, SEEK_SET);
+            fwrite(&pcb->program->instmem[page_start], WORD_SIZE, remaining_insts, swapfile);
+            struct inst nop = { .op = OP_NOP };
+            for (uint32_t j = remaining_insts; j < SWAP_PAGE_SIZE; j++) {
+                fwrite(&nop, WORD_SIZE, 1, swapfile);
             }
         }
     }
-    fclose(program);
     fflush(swapfile);
     return 0;
 }

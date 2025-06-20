@@ -27,7 +27,7 @@ struct inst {
         int32_t imm; 
     };
 };
-struct inst *inst_from_str(const char *buf);
+struct inst *inst_from_str(char *buf);
 void inst_to_str(const struct inst *self, char *str, size_t size);
 
 #endif

@@ -9,10 +9,6 @@
 #include <queue.h>
 #include <cpu_event.h>
 
-enum consts {
-    INSTS_MAX = 128,
-};
-
 typedef uint64_t word_t; /* Palabras de 64 bits en la computadora */
 #define WORD_SIZE sizeof(word_t)                                // Bytes por instrucción/palabra
 

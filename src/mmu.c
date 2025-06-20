@@ -35,13 +35,13 @@ mmu_get_inst(const uint16_t virt_addr)
      */
     if (relative_target_frame >= curr_proc->tmp_size ||
         (relative_target_frame == (curr_proc->tmp_size - 1) &&
-         (curr_proc->program_size % SWAP_PAGE_SIZE) < offset))
+         (curr_proc->program->length % SWAP_PAGE_SIZE) < offset))
     {
         return (struct inst) { .op = OP_END, .ra = REG_AX, .imm = 0 };
     }
 
     //const uint16_t abs_target_frame 
-    uint16_t abs_target_frame
+    int32_t abs_target_frame
         = curr_proc->tmp_rows[relative_target_frame].on_ram;
     if (abs_target_frame == -1) {
         msg_log(LOG_LEVEL_WARN, "Se emite un fallo de página");
